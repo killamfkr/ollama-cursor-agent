@@ -9,6 +9,9 @@ from typing import Any, AsyncIterator, Callable, Awaitable
 from .config import settings
 from .ollama_client import OllamaClient
 from .tools import execute_tool
+from .tool_calls import ollama_tool_calls
+from .workspace_context import workspace_context_block
+
 
 def build_system_prompt() -> str:
     gh_note = ""
@@ -24,18 +27,25 @@ For deliverable work, follow the Cursor-style git workflow:
 - Open a PR with `github_create_pull_request` and comment on the issue with `github_post_comment`
 Branch suffix convention: `{settings.github_branch_suffix}`.
 """
+    ctx = workspace_context_block()
     return f"""You are a local coding agent (similar to Cursor Cloud Agents). You help users build and fix software inside a mounted workspace directory.
 
+Context (what is mounted right now):
+{ctx}
+
 Behaviors:
-- Break tasks into steps. Use tools to inspect the repo before changing files.
-- Prefer minimal, focused edits. Match existing code style.
-- Run builds/tests with run_shell when appropriate.
-- When the task is a GitHub issue, implement it fully through PR — do not stop at local edits only.
+- Answer conversational questions in plain language (e.g. "is this an app?") using README and list_directory/read_file — do not guess.
+- Use tools to inspect the repo before changing files; prefer minimal, focused edits.
+- For search_files you MUST pass a regex `pattern` (example: `pattern`=\"FastAPI\"). For broad exploration use list_directory or glob_files.
+- Only use GitHub tools when the user names an issue number or asks for PR/issue work. Never call github_get_issue without a positive issue number.
+- When the task is a GitHub issue, implement through branch → commit → push → PR.
 {gh_note}
 Tools: list_directory, read_file, write_file, search_files, glob_files, run_shell,
 git_status, git_checkout_branch, git_commit, git_push,
 github_get_issue, github_post_comment, github_create_pull_request.
 All file paths are relative to the workspace root.
+
+Call tools via native tool_calls (not JSON in the chat text).
 """
 
 
@@ -106,20 +116,12 @@ async def run_agent_turn(
         session.messages.append(msg)
 
         content = msg.get("content") or ""
-        tool_calls = msg.get("tool_calls") or []
+        calls = ollama_tool_calls(msg)
 
-        if tool_calls:
-            for tc in tool_calls:
-                fn = tc.get("function", {})
-                name = fn.get("name", "")
-                raw_args = fn.get("arguments", "{}")
-                if isinstance(raw_args, str):
-                    try:
-                        args = json.loads(raw_args)
-                    except json.JSONDecodeError:
-                        args = {}
-                else:
-                    args = raw_args
+        if calls:
+            for call in calls:
+                name = call["name"]
+                args = call["arguments"]
 
                 if on_event:
                     await on_event(
@@ -140,6 +142,7 @@ async def run_agent_turn(
                 session.messages.append(
                     {
                         "role": "tool",
+                        "tool_name": name,
                         "content": result,
                     }
                 )
