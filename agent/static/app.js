@@ -131,10 +131,15 @@ document.getElementById("composer").addEventListener("submit", async (e) => {
           sessionId = payload.session_id;
           sessionLabel.textContent = `Session ${sessionId.slice(0, 8)}…`;
         } else if (payload.type === "tool_call") {
-          const args = JSON.stringify(payload.data.arguments || {}, null, 2);
+          const args = payload.data.arguments || {};
+          const brief = Object.entries(args)
+            .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+            .join(", ");
           addBubble(
             "tool",
-            `▸ ${payload.data.name}\n${args}`,
+            brief
+              ? `▸ ${payload.data.name} (${brief})`
+              : `▸ ${payload.data.name}`,
           );
         } else if (payload.type === "tool_result") {
           addBubble("tool", `✓ ${payload.data.name}\n${payload.data.result}`);
