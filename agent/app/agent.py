@@ -113,10 +113,26 @@ async def run_agent_turn(
 
         response = await ollama.chat(session.messages, model=session.model, tools=True)
         msg = response.get("message", {})
-        session.messages.append(msg)
-
         content = msg.get("content") or ""
         calls = ollama_tool_calls(msg)
+
+        # Weak models emit JSON tool calls in `content` instead of tool_calls — record
+        # a clean assistant message so the next turn produces a human answer.
+        if calls and not msg.get("tool_calls"):
+            stored = dict(msg)
+            stored["content"] = ""
+            stored["tool_calls"] = [
+                {
+                    "function": {
+                        "name": c["name"],
+                        "arguments": json.dumps(c["arguments"]),
+                    }
+                }
+                for c in calls
+            ]
+            session.messages.append(stored)
+        else:
+            session.messages.append(msg)
 
         if calls:
             for call in calls:
@@ -148,7 +164,9 @@ async def run_agent_turn(
                 )
             continue
 
-        if content.strip():
+        if content.strip() and not ollama_tool_calls(
+            {"content": content, "tool_calls": []}
+        ):
             final_text = content.strip()
             if on_event:
                 await on_event(session.append_event("assistant_message", content=final_text))

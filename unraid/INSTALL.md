@@ -97,6 +97,10 @@ You should see **`"version":"0.2.2"`** (or newer) after updating the container i
 
 ## Updates (when Unraid does not show one)
 
+### Why `:latest` never “auto-updates”
+
+`:latest` is only a **label on a container image**. Unraid (and Docker) keep running the **image digest you already pulled** until you pull again. Publishing a new build to GHCR moves the `:latest` tag on the registry, but your server still has the **old digest** — there is no background sync. “Check for updates” often misses GHCR `:latest` digest changes, so you should **pull explicitly** after each release.
+
 Unraid often **does not flag** a new `ghcr.io/...:latest` image. The GitHub Actions build may already be done while Docker still shows no update.
 
 **1. Pull the image** (Unraid terminal or SSH):
