@@ -32,6 +32,13 @@
         <hr class="divider" />
         <h2 class="section-title">GitHub</h2>
         <div class="status" id="githubStatus">Checking GitHub…</div>
+        <label class="field" id="repoField">
+          <span>Repository</span>
+          <select id="repoSelect" disabled>
+            <option value="">(load repos)</option>
+          </select>
+        </label>
+        <button id="refreshRepos" class="btn secondary">Refresh repositories</button>
         <button id="refreshIssues" class="btn secondary">Load open issues</button>
         <label class="field">
           <span>Run on issue #</span>

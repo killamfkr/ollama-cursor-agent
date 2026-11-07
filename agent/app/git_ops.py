@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import settings
+from .github_prefs import effective_github_repo
 
 
 def workspace_root() -> Path:
@@ -59,19 +60,31 @@ async def ensure_git_identity() -> None:
         pass
 
 
+async def _workspace_is_git_repo() -> bool:
+    try:
+        await _run_git("rev-parse", "--git-dir")
+        return True
+    except RuntimeError:
+        return False
+
+
 async def configure_origin_from_settings() -> dict[str, Any]:
     token = settings.github_token.strip()
-    repo = settings.github_repo.strip()
+    repo = effective_github_repo()
     if not token or not repo or "/" not in repo:
         return {"configured": False, "reason": "missing token or repo"}
+    if not await _workspace_is_git_repo():
+        return {"configured": False, "reason": "workspace is not a git repository"}
     owner, name = repo.split("/", 1)
     url = _authenticated_url(owner, name, token)
     try:
         await _run_git("remote", "get-url", "origin")
         await _run_git("remote", "set-url", "origin", url)
     except RuntimeError:
-        await _run_git("remote", "add", "origin", url)
-    # Scrub token from returned value
+        try:
+            await _run_git("remote", "add", "origin", url)
+        except RuntimeError as e:
+            return {"configured": False, "reason": str(e)}
     return {"configured": True, "remote": f"https://github.com/{repo}.git"}
 
 

@@ -73,7 +73,7 @@ In `.env`:
 
 ```env
 GITHUB_TOKEN=ghp_...          # classic PAT or fine-grained token
-GITHUB_REPO=your-user/your-repo
+# GITHUB_REPO=your-user/your-repo   # optional — pick repo in the Web UI instead
 GITHUB_DEFAULT_BRANCH=main
 GITHUB_BRANCH_PREFIX=cursor/
 GITHUB_BRANCH_SUFFIX=local
@@ -85,7 +85,9 @@ Mount a **clone** of that repo at `AGENT_WORKSPACE` (or use `../` if compose liv
 
 ### 2. Run from the UI
 
-Open the **GitHub** section in the sidebar → **Load open issues** → **Run** on an issue.  
+Set **`GITHUB_TOKEN`** (or `AGENT_GITHUB_TOKEN` on Unraid), open the Web UI, and use the **Repository** dropdown in the GitHub section (like Cursor Cloud). If your workspace is already a git clone, the agent can auto-detect `origin` until you pick one.
+
+Open **Load open issues** → **Run** on an issue.  
 The agent will:
 
 1. Comment on the issue that it started  

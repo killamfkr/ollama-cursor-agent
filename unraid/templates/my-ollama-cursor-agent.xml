@@ -9,7 +9,7 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/killamfkr/ollama-cursor-agent/issues</Support>
   <Project>https://github.com/killamfkr/ollama-cursor-agent</Project>
-  <Overview>Local Cursor-style coding agent: chat UI, file tools, shell, and GitHub PR workflow — powered by Ollama on your Unraid box.[br][br]Requires [b]ollama[/b] on the same Docker network [b]ollama-agent[/b]. Install [b]Ollama (Cursor Agent stack)[/b] template first, or run the one-script setup.[br][br]Clone your git repo into the Workspace path, set GitHub token/repo for issue automation.</Overview>
+  <Overview>Local Cursor-style coding agent: chat UI, file tools, shell, and GitHub PR workflow — powered by Ollama on your Unraid box.[br][br]Requires [b]ollama[/b] on the same Docker network [b]ollama-agent[/b]. Set [b]GitHub token[/b] only — pick the repository in the Web UI (like Cursor Cloud). Mount a git clone under Workspace for push/PR.</Overview>
   <Category>AI:Productivity</Category>
   <WebUI>http://[IP]:[PORT:8080]/</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/killamfkr/ollama-cursor-agent/main/unraid/templates/my-ollama-cursor-agent.xml</TemplateURL>
@@ -17,13 +17,14 @@
   <ExtraParams/>
   <PostArgs/>
   <Config Name="Agent WebUI" Target="8080" Default="8080" Mode="tcp" Description="Web UI and REST API" Type="Port" Display="always" Required="true" Mask="false">8080</Config>
-  <Config Name="Workspace (git repo)" Target="/workspace" Default="/mnt/user/appdata/ollama-cursor-agent/workspace" Mode="rw" Description="Git clone the agent edits (mount your project here)" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/ollama-cursor-agent/workspace</Config>
-  <Config Name="Agent data" Target="/data" Default="/mnt/user/appdata/ollama-cursor-agent/agent-data" Mode="rw" Description="Optional agent persistence" Type="Path" Display="advanced" Required="false" Mask="false">/mnt/user/appdata/ollama-cursor-agent/agent-data</Config>
+  <Config Name="Workspace (git repo)" Target="/workspace" Default="/mnt/user/appdata/ollama-cursor-agent/workspace" Mode="rw" Description="Git clone the agent edits (mount your project here)" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/appdata/ollama-cursor-agent/workspace</Config>
+  <Config Name="Agent data" Target="/data" Default="/mnt/user/appdata/ollama-cursor-agent/agent-data" Mode="rw" Description="Persists GitHub repo picker choice" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/appdata/ollama-cursor-agent/agent-data</Config>
+  <Config Name="Data dir env" Target="AGENT_DATA_DIR" Default="/data" Mode="" Description="Must match Agent data mount" Type="Variable" Display="advanced" Required="false" Mask="false">/data</Config>
   <Config Name="Ollama URL" Target="AGENT_OLLAMA_BASE_URL" Default="http://ollama:11434" Mode="" Description="Ollama API base URL" Type="Variable" Display="always" Required="true" Mask="false">http://ollama:11434</Config>
   <Config Name="Default model" Target="AGENT_DEFAULT_MODEL" Default="qwen2.5-coder:7b" Mode="" Description="Ollama model name" Type="Variable" Display="always" Required="false" Mask="false">qwen2.5-coder:7b</Config>
   <Config Name="Max agent steps" Target="AGENT_MAX_AGENT_STEPS" Default="40" Mode="" Description="Tool loop limit per task" Type="Variable" Display="advanced" Required="false" Mask="false">40</Config>
   <Config Name="GitHub token" Target="AGENT_GITHUB_TOKEN" Default="" Mode="" Description="PAT for push/PR (repo + issues scope)" Type="Variable" Display="always" Required="false" Mask="true"/>
-  <Config Name="GitHub repo" Target="AGENT_GITHUB_REPO" Default="killamfkr/ollama-cursor-agent" Mode="" Description="owner/name for issues and PRs" Type="Variable" Display="always" Required="false" Mask="false">killamfkr/ollama-cursor-agent</Config>
+  <Config Name="GitHub repo" Target="AGENT_GITHUB_REPO" Default="" Mode="" Description="Optional lock to owner/name — leave empty and use Web UI repo dropdown" Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
   <Config Name="Default branch" Target="AGENT_GITHUB_DEFAULT_BRANCH" Default="main" Mode="" Description="PR base branch" Type="Variable" Display="advanced" Required="false" Mask="false">main</Config>
   <Config Name="Webhook secret" Target="AGENT_GITHUB_WEBHOOK_SECRET" Default="" Mode="" Description="GitHub webhook HMAC secret" Type="Variable" Display="advanced" Required="false" Mask="true"/>
   <Config Name="Trigger label" Target="AGENT_GITHUB_TRIGGER_LABEL" Default="agent" Mode="" Description="Issue label that starts the agent" Type="Variable" Display="advanced" Required="false" Mask="false">agent</Config>

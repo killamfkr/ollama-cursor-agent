@@ -5,6 +5,7 @@ from typing import Any
 import httpx
 
 from .config import settings
+from .github_prefs import effective_github_repo, token_configured
 
 API = "https://api.github.com"
 
@@ -19,7 +20,11 @@ class GitHubError(Exception):
 class GitHubClient:
     def __init__(self, token: str | None = None, repo: str | None = None) -> None:
         self.token = (token or settings.github_token).strip()
-        self.repo = (repo or settings.github_repo).strip()
+        self.repo = (repo or effective_github_repo()).strip()
+
+    @property
+    def token_ok(self) -> bool:
+        return token_configured()
 
     @property
     def configured(self) -> bool:
@@ -60,7 +65,7 @@ class GitHubClient:
     async def verify_auth(self) -> dict[str, Any]:
         user = await self._request("GET", "/user")
         out: dict[str, Any] = {"login": user.get("login"), "ok": True}
-        if self.configured:
+        if self.repo and "/" in self.repo:
             repo = await self._request("GET", f"/repos/{self.repo}")
             out["repo"] = {
                 "full_name": repo.get("full_name"),
@@ -173,3 +178,34 @@ class GitHubClient:
                 "state": p["state"],
             }
         return None
+
+    async def list_repositories(
+        self, *, limit: int = 100, affiliation: str = "owner,collaborator,organization_member"
+    ) -> list[dict[str, Any]]:
+        if not self.token:
+            raise GitHubError(401, "GITHUB token not configured")
+        per_page = min(max(limit, 1), 100)
+        items = await self._request(
+            "GET",
+            "/user/repos",
+            params={
+                "sort": "updated",
+                "direction": "desc",
+                "per_page": per_page,
+                "affiliation": affiliation,
+            },
+        )
+        if not isinstance(items, list):
+            return []
+        return [
+            {
+                "full_name": r.get("full_name"),
+                "name": r.get("name"),
+                "owner": (r.get("owner") or {}).get("login"),
+                "private": r.get("private"),
+                "default_branch": r.get("default_branch"),
+                "html_url": r.get("html_url"),
+            }
+            for r in items
+            if r.get("full_name")
+        ]

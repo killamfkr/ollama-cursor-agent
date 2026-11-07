@@ -16,6 +16,14 @@ from .agent import run_agent_turn, store, stream_agent_turn
 from .config import settings
 from .git_ops import configure_origin_from_settings, ensure_git_identity
 from .github_client import GitHubClient, GitHubError
+from .github_prefs import (
+    detect_repo_from_workspace,
+    effective_github_repo,
+    github_env_repo_locked,
+    save_selected_repo,
+    selected_repo_from_store,
+    token_configured,
+)
 from .github_jobs import job_store
 from .github_webhook import handle_github_event, verify_signature
 from .ollama_client import OllamaClient
@@ -28,7 +36,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Ollama Cursor Agent", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="Ollama Cursor Agent", version="0.2.1", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -55,6 +63,10 @@ class RunIssueRequest(BaseModel):
     instruction: str = ""
 
 
+class GitHubRepoRequest(BaseModel):
+    repo: str
+
+
 @app.get("/api/health")
 async def health() -> dict[str, Any]:
     ollama = OllamaClient()
@@ -71,7 +83,13 @@ async def get_config() -> dict[str, Any]:
         "default_model": settings.default_model,
         "workspace_root": settings.workspace_root,
         "max_agent_steps": settings.max_agent_steps,
-        "github_repo": settings.github_repo or None,
+        "github_repo": effective_github_repo() or None,
+        "github_repo_source": (
+            "env"
+            if github_env_repo_locked()
+            else ("ui" if selected_repo_from_store() else ("workspace" if detect_repo_from_workspace() else None))
+        ),
+        "github_repo_locked": github_env_repo_locked(),
         "github_default_branch": settings.github_default_branch,
         "github_trigger_label": settings.github_trigger_label,
         "github_comment_trigger": settings.github_comment_trigger,
@@ -82,16 +100,64 @@ async def get_config() -> dict[str, Any]:
 @app.get("/api/github/status")
 async def github_status() -> dict[str, Any]:
     gh = GitHubClient()
-    if not gh.configured:
+    base: dict[str, Any] = {
+        "token_configured": token_configured(),
+        "repo": effective_github_repo() or None,
+        "repo_locked": github_env_repo_locked(),
+        "repo_detected_workspace": detect_repo_from_workspace() or None,
+        "repo_selected_ui": selected_repo_from_store() or None,
+    }
+    if not token_configured():
         return {
+            **base,
             "configured": False,
-            "hint": "Set AGENT_GITHUB_TOKEN and AGENT_GITHUB_REPO on the agent container",
+            "hint": "Set AGENT_GITHUB_TOKEN on the agent container (repo can be chosen in the UI)",
         }
     try:
         auth = await gh.verify_auth()
-        return {"configured": True, **auth}
     except GitHubError as e:
-        return {"configured": True, "ok": False, "error": e.message, "status": e.status}
+        return {
+            **base,
+            "configured": False,
+            "ok": False,
+            "error": e.message,
+            "status": e.status,
+        }
+    if not gh.configured:
+        return {
+            **base,
+            **auth,
+            "configured": False,
+            "hint": "Choose a repository in the GitHub section of the sidebar",
+        }
+    return {"configured": True, **base, **auth}
+
+
+@app.get("/api/github/repos")
+async def github_repos(limit: int = 100) -> dict[str, Any]:
+    gh = GitHubClient()
+    if not token_configured():
+        raise HTTPException(status_code=400, detail="GitHub token not configured")
+    try:
+        repos = await gh.list_repositories(limit=limit)
+    except GitHubError as e:
+        raise HTTPException(status_code=e.status, detail=e.message) from e
+    return {"repos": repos, "selected": effective_github_repo() or None}
+
+
+@app.put("/api/github/repo")
+async def github_set_repo(body: GitHubRepoRequest) -> dict[str, Any]:
+    if github_env_repo_locked():
+        raise HTTPException(
+            status_code=409,
+            detail="Repository is fixed by AGENT_GITHUB_REPO; clear it to use the UI picker",
+        )
+    try:
+        saved = save_selected_repo(body.repo)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    await configure_origin_from_settings()
+    return {"repo": saved, "selected": saved}
 
 
 @app.get("/api/github/issues")

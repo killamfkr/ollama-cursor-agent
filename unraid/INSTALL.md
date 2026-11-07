@@ -79,7 +79,8 @@ Unraid 8 compose installer: [`templates/ollama-cursor-agent-stack.xml`](template
 | Variable | Purpose |
 |----------|---------|
 | `AGENT_GITHUB_TOKEN` | PAT with `repo` + issues |
-| `AGENT_GITHUB_REPO` | `owner/repo` |
+| `AGENT_GITHUB_REPO` | Optional — leave empty and use the Web UI repo dropdown |
+| Agent data path (`/data`) | Persists selected repo across container recreates |
 | `AGENT_GITHUB_WEBHOOK_SECRET` | Webhook HMAC secret |
 
 Webhook URL: `https://<public-host>/api/github/webhook` (Issues + Issue comments).  

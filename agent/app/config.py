@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://ollama:11434"
     default_model: str = "qwen2.5-coder:7b"
     workspace_root: str = "/workspace"
+    # Persisted UI state (repo picker, etc.) — mount on Unraid for survives recreate
+    data_dir: str = "/data"
     max_agent_steps: int = 40
     shell_timeout_sec: int = 120
     host: str = "0.0.0.0"
