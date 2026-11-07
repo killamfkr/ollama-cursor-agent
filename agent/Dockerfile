@@ -1,6 +1,6 @@
 FROM python:3.12-slim-bookworm
 
-ARG APP_VERSION=0.2.5
+ARG APP_VERSION=0.2.6
 LABEL org.opencontainers.image.version="${APP_VERSION}"
 
 WORKDIR /app

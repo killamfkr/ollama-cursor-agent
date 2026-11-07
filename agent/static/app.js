@@ -221,8 +221,57 @@ async function setGithubRepo(fullName) {
   const data = await r.json();
   if (!r.ok) throw new Error(data.detail || JSON.stringify(data));
   selectedRepo = data.repo;
+  if (data.clone) {
+    const ws = document.getElementById("workspaceStatus");
+    if (data.clone.ok) {
+      ws.textContent = `Workspace: ${data.clone.action} ${data.repo}`;
+      ws.className = "status ok";
+    } else if (data.clone.action === "blocked") {
+      ws.textContent = data.clone.hint || "Workspace not empty — mount an empty folder.";
+      ws.className = "status bad";
+    }
+  }
   await loadGithub();
+  await loadWorkspaceStatus();
 }
+
+async function loadWorkspaceStatus() {
+  const el = document.getElementById("workspaceStatus");
+  if (!el) return;
+  try {
+    const r = await fetch("/api/workspace");
+    const data = await r.json();
+    if (data.hint) {
+      el.textContent = data.hint;
+      el.className = data.synced && !data.empty ? "status ok" : "status bad";
+    } else if (data.synced) {
+      el.textContent = `Workspace in sync with ${data.selected_repo}`;
+      el.className = "status ok";
+    } else {
+      el.textContent = `Workspace: ${data.path}`;
+      el.className = "status";
+    }
+  } catch (e) {
+    el.textContent = "";
+  }
+}
+
+document.getElementById("cloneWorkspace").addEventListener("click", async () => {
+  const el = document.getElementById("workspaceStatus");
+  el.textContent = "Cloning / pulling…";
+  el.className = "status";
+  try {
+    const r = await fetch("/api/workspace/clone", { method: "POST" });
+    const data = await r.json();
+    if (!r.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || data));
+    el.textContent = `${data.action}: ${data.repo}`;
+    el.className = "status ok";
+  } catch (e) {
+    el.textContent = `Clone failed: ${e.message}`;
+    el.className = "status bad";
+  }
+  await loadWorkspaceStatus();
+});
 
 async function loadGithub() {
   const el = document.getElementById("githubStatus");
@@ -266,6 +315,7 @@ async function loadGithub() {
       return;
     }
     await loadGithubRepos(selectedRepo);
+    await loadWorkspaceStatus();
   } catch (e) {
     el.textContent = `GitHub check failed: ${e.message}`;
     el.className = "status bad";
@@ -383,3 +433,4 @@ loadModels();
 loadGithub();
 loadJobs();
 loadAppMeta();
+loadWorkspaceStatus();

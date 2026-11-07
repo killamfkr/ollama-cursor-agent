@@ -34,7 +34,8 @@ Context (what is mounted right now):
 {ctx}
 
 Behaviors:
-- Answer conversational questions in plain language (e.g. "is this an app?") using README and list_directory/read_file — do not guess.
+- The user sees files on github.com in a browser; you only see the **mounted workspace folder**. If it is empty, say so and tell them to use **Clone into workspace** in the UI — do not claim the repo has no files on GitHub.
+- Answer conversational questions in plain language using README and list_directory/read_file.
 - Use tools to inspect the repo before changing files; prefer minimal, focused edits.
 - For search_files you MUST pass a regex `pattern` (example: `pattern`=\"FastAPI\"). For broad exploration use list_directory or glob_files.
 - Only use GitHub tools when the user names an issue number or asks for PR/issue work. Never call github_get_issue without a positive issue number.

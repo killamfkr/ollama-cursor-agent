@@ -30,7 +30,7 @@ Then **Apps → Private Apps** → install **ollama**, then **ollama-cursor-agen
 
 1. **Private Apps** → **ollama-cursor-agent** → **Install**.
 2. **Ollama Base URL**: `http://<UNRAID-IP>:11434` (LAN IP — not `127.0.0.1`).
-3. **Workspace**: git clone the agent may edit, e.g. `/mnt/user/appdata/ollama-cursor-agent/workspace`.
+3. **Workspace**: empty folder is OK — pick the repo in the Web UI and click **Clone into workspace** (or git clone manually). The agent does not read github.com; it only sees this mount.
 4. Web UI: `http://<UNRAID-IP>:8080`.
 
 Image: `ghcr.io/killamfkr/ollama-cursor-agent:latest`. If GHCR pull fails, build locally:
