@@ -62,6 +62,13 @@ body {
   font-size: 0.8rem;
 }
 
+.model-hint {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
 .brand .app-version {
   font-size: 0.72rem;
   opacity: 0.85;

@@ -361,8 +361,9 @@ async def execute_tool(name: str, arguments: dict[str, Any]) -> str:
         if name == "write_file":
             return _write_file(arguments["path"], arguments["content"])
         if name == "search_files":
+            pattern = arguments.get("pattern") or arguments.get("query") or "."
             return _search_files(
-                arguments["pattern"],
+                pattern,
                 arguments.get("path", "."),
                 arguments.get("glob"),
             )
@@ -374,8 +375,15 @@ async def execute_tool(name: str, arguments: dict[str, Any]) -> str:
             )
         if name == "github_get_issue":
             try:
+                number = int(arguments.get("number") or 0)
+                if number < 1:
+                    return json.dumps(
+                        {
+                            "error": "Issue number must be >= 1. Ask the user which GitHub issue to use, or use the sidebar Run on issue # control.",
+                        }
+                    )
                 gh = GitHubClient()
-                issue = await gh.get_issue(int(arguments["number"]))
+                issue = await gh.get_issue(number)
                 return json.dumps(issue, indent=2)
             except GitHubError as e:
                 return json.dumps({"error": e.message, "status": e.status})
