@@ -361,7 +361,20 @@ document.getElementById("runIssueBtn").addEventListener("click", () => {
   runIssue(n);
 });
 
+async function loadAppMeta() {
+  const el = document.getElementById("appVersion");
+  if (!el) return;
+  try {
+    const r = await fetch("/api/config");
+    const data = await r.json();
+    el.textContent = data.version ? `Agent v${data.version}` : "";
+  } catch (_) {
+    el.textContent = "";
+  }
+}
+
 loadHealth();
 loadModels();
 loadGithub();
 loadJobs();
+loadAppMeta();

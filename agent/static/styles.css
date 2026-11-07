@@ -62,6 +62,11 @@ body {
   font-size: 0.8rem;
 }
 
+.brand .app-version {
+  font-size: 0.72rem;
+  opacity: 0.85;
+}
+
 .field {
   display: flex;
   flex-direction: column;

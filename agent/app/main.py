@@ -47,6 +47,15 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def no_cache_ui_assets(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path in ("/", "/index.html", "/app.js", "/styles.css"):
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+    return response
+
+
 class ChatRequest(BaseModel):
     message: str
     session_id: str | None = None
