@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ollama Cursor Agent</title>
-    <link rel="stylesheet" href="/styles.css?v=0.2.5" />
+    <link rel="stylesheet" href="/styles.css?v=0.2.6" />
   </head>
   <body>
     <div class="app">
@@ -39,6 +39,8 @@
             <option value="">(load repos)</option>
           </select>
         </label>
+        <div class="status" id="workspaceStatus"></div>
+        <button id="cloneWorkspace" class="btn secondary">Clone into workspace</button>
         <button id="refreshRepos" class="btn secondary">Refresh repositories</button>
         <button id="refreshIssues" class="btn secondary">Load open issues</button>
         <label class="field">
@@ -68,6 +70,6 @@
         </form>
       </main>
     </div>
-    <script src="/app.js?v=0.2.5"></script>
+    <script src="/app.js?v=0.2.6"></script>
   </body>
 </html>

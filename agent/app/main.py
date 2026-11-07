@@ -27,6 +27,7 @@ from .github_prefs import (
 from .github_jobs import job_store
 from .github_webhook import handle_github_event, verify_signature
 from .ollama_client import OllamaClient
+from .workspace_sync import ensure_workspace_has_repo, workspace_status
 from .__version__ import __version__
 
 
@@ -168,7 +169,30 @@ async def github_set_repo(body: GitHubRepoRequest) -> dict[str, Any]:
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     await configure_origin_from_settings()
-    return {"repo": saved, "selected": saved}
+    clone = await ensure_workspace_has_repo(saved)
+    return {
+        "repo": saved,
+        "selected": saved,
+        "workspace": await workspace_status(),
+        "clone": clone,
+    }
+
+
+@app.get("/api/workspace")
+async def get_workspace_status() -> dict[str, Any]:
+    return await workspace_status()
+
+
+@app.post("/api/workspace/clone")
+async def post_workspace_clone() -> dict[str, Any]:
+    if not token_configured():
+        raise HTTPException(status_code=400, detail="GitHub token required to clone")
+    result = await ensure_workspace_has_repo()
+    if not result.get("ok") and result.get("action") == "blocked":
+        raise HTTPException(status_code=409, detail=result)
+    if not result.get("ok"):
+        raise HTTPException(status_code=502, detail=result)
+    return result
 
 
 @app.get("/api/github/issues")
