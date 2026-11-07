@@ -12,9 +12,12 @@ from .tools import execute_tool
 
 def build_system_prompt() -> str:
     gh_note = ""
-    if settings.github_token and settings.github_repo:
+    from .github_prefs import effective_github_repo
+
+    github_repo = effective_github_repo()
+    if settings.github_token and github_repo:
         gh_note = f"""
-GitHub is configured for `{settings.github_repo}` (default branch: `{settings.github_default_branch}`).
+GitHub is configured for `{github_repo}` (default branch: `{settings.github_default_branch}`).
 For deliverable work, follow the Cursor-style git workflow:
 - `git_checkout_branch` on `{settings.github_branch_prefix}...` before edits
 - Commit with `git_commit`, push with `git_push`

@@ -155,29 +155,132 @@ document.getElementById("composer").addEventListener("submit", async (e) => {
   }
 });
 
+let selectedRepo = null;
+let repoLocked = false;
+
+async function loadGithubRepos(preselect) {
+  const select = document.getElementById("repoSelect");
+  if (repoLocked) return;
+  select.disabled = true;
+  const first = select.options[0];
+  select.innerHTML = "";
+  if (first) select.appendChild(first);
+  else {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "Loading…";
+    select.appendChild(opt);
+  }
+  try {
+    const r = await fetch("/api/github/repos");
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || r.statusText);
+    select.innerHTML = "";
+    const repos = data.repos || [];
+    if (!repos.length) {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "(no repositories)";
+      select.appendChild(opt);
+      select.disabled = true;
+      return;
+    }
+    const pick = preselect || data.selected || selectedRepo;
+    for (const repo of repos) {
+      const opt = document.createElement("option");
+      opt.value = repo.full_name;
+      opt.textContent = repo.private ? `${repo.full_name} (private)` : repo.full_name;
+      select.appendChild(opt);
+    }
+    if (pick && repos.some((x) => x.full_name === pick)) {
+      select.value = pick;
+      selectedRepo = pick;
+    }
+    select.disabled = false;
+  } catch (e) {
+    select.innerHTML = "";
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = `Error: ${e.message}`;
+    select.appendChild(opt);
+  }
+}
+
+async function setGithubRepo(fullName) {
+  if (!fullName || repoLocked) return;
+  const r = await fetch("/api/github/repo", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ repo: fullName }),
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.detail || JSON.stringify(data));
+  selectedRepo = data.repo;
+  await loadGithub();
+}
+
 async function loadGithub() {
   const el = document.getElementById("githubStatus");
+  const select = document.getElementById("repoSelect");
   try {
     const r = await fetch("/api/github/status");
     const data = await r.json();
-    if (!data.configured) {
-      el.textContent = "GitHub not configured (set GITHUB_TOKEN + GITHUB_REPO)";
+    repoLocked = Boolean(data.repo_locked);
+    selectedRepo = data.repo || data.repo_selected_ui || data.repo_detected_workspace || null;
+
+    if (!data.token_configured) {
+      el.textContent =
+        "Set AGENT_GITHUB_TOKEN on the container, then pick a repo below (like Cursor Cloud)";
       el.className = "status bad";
+      select.disabled = true;
       return;
     }
     if (data.ok === false) {
       el.textContent = `GitHub error: ${data.error || "auth failed"}`;
       el.className = "status bad";
+    } else if (data.configured && data.login) {
+      const repo =
+        data.repo?.full_name || data.repo || selectedRepo || "no repo selected";
+      el.textContent = `GitHub: ${data.login} @ ${repo}`;
+      el.className = "status ok";
+    } else {
+      el.textContent = `Signed in as ${data.login || "…"} — choose a repository`;
+      el.className = "status";
+    }
+
+    if (repoLocked) {
+      select.disabled = true;
+      if (selectedRepo) {
+        select.innerHTML = "";
+        const opt = document.createElement("option");
+        opt.value = selectedRepo;
+        opt.textContent = `${selectedRepo} (from AGENT_GITHUB_REPO)`;
+        select.appendChild(opt);
+        select.value = selectedRepo;
+      }
       return;
     }
-    const repo = data.repo?.full_name || "connected";
-    el.textContent = `GitHub: ${data.login} @ ${repo}`;
-    el.className = "status ok";
+    await loadGithubRepos(selectedRepo);
   } catch (e) {
     el.textContent = `GitHub check failed: ${e.message}`;
     el.className = "status bad";
   }
 }
+
+document.getElementById("refreshRepos").addEventListener("click", () =>
+  loadGithubRepos(selectedRepo)
+);
+document.getElementById("repoSelect").addEventListener("change", async (e) => {
+  const value = e.target.value;
+  if (!value) return;
+  try {
+    await setGithubRepo(value);
+  } catch (err) {
+    const el = document.getElementById("githubStatus");
+    el.textContent = `Could not set repo: ${err.message}`;
+    el.className = "status bad";
+  }
+});
 
 async function loadJobs() {
   const panel = document.getElementById("jobsPanel");

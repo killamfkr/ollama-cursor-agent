@@ -10,6 +10,7 @@ from .agent import run_agent_turn, store
 from .config import settings
 from .git_ops import default_feature_branch, git_checkout_branch, git_fetch
 from .github_client import GitHubClient, GitHubError
+from .github_prefs import effective_github_repo
 
 
 @dataclass
@@ -68,7 +69,7 @@ def _build_issue_prompt(issue: dict[str, Any], branch: str, extra: str) -> str:
         f"- {c['user']}: {c['body'][:500]}" for c in issue.get("comments", [])[-8:]
     )
     base = settings.github_default_branch
-    repo = settings.github_repo
+    repo = effective_github_repo()
     parts = [
         f"GitHub issue #{issue['number']} on {repo}",
         f"Title: {issue['title']}",

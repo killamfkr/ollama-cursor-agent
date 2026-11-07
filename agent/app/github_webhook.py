@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from .config import settings
+from .github_prefs import effective_github_repo, token_configured
 from .github_jobs import job_store
 
 
@@ -22,8 +23,13 @@ def verify_signature(body: bytes, signature_header: str | None) -> bool:
 
 
 async def handle_github_event(event_name: str, payload: dict[str, Any]) -> dict[str, Any]:
-    if not settings.github_token or not settings.github_repo:
+    if not token_configured() or not effective_github_repo():
         return {"ignored": True, "reason": "github not configured"}
+
+    repo_full = effective_github_repo()
+    payload_repo = (payload.get("repository") or {}).get("full_name")
+    if payload_repo and payload_repo != repo_full:
+        return {"ignored": True, "reason": "different repository"}
 
     if event_name == "issues":
         action = payload.get("action")
