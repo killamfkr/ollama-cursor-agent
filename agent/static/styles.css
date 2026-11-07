@@ -249,10 +249,78 @@ body {
   color: var(--accent);
 }
 
-.bubble.thinking {
+.bubble.thinking,
+.bubble.activity {
   color: var(--muted);
-  font-style: italic;
   border-style: dashed;
+  border-color: var(--accent-dim);
+  align-self: stretch;
+  max-width: 100%;
+}
+
+.activity-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.activity-detail {
+  margin-top: 0.45rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  opacity: 0.9;
+}
+
+.spinner {
+  width: 1.1rem;
+  height: 1.1rem;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: spin 0.85s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.run-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--accent);
+  margin-bottom: 0.5rem;
+}
+
+.run-status.hidden {
+  display: none;
+}
+
+.composer-actions .btn.primary .spinner-inline {
+  display: none;
+}
+
+.btn.primary.is-running {
+  position: relative;
+  padding-left: 2rem;
+}
+
+.btn.primary.is-running::before {
+  content: "";
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  margin-top: -0.45rem;
+  width: 0.9rem;
+  height: 0.9rem;
+  border: 2px solid rgba(11, 13, 18, 0.25);
+  border-top-color: #0b0d12;
+  border-radius: 50%;
+  animation: spin 0.85s linear infinite;
 }
 
 .composer {

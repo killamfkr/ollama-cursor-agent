@@ -17,6 +17,49 @@ function addBubble(kind, text, html = false) {
   return div;
 }
 
+function createActivityBubble() {
+  const div = document.createElement("div");
+  div.className = "bubble activity";
+  div.innerHTML = `
+    <div class="activity-row">
+      <span class="spinner" aria-hidden="true"></span>
+      <span class="activity-text">Agent is working…</span>
+    </div>
+    <div class="activity-detail"></div>
+  `;
+  transcript.appendChild(div);
+  transcript.scrollTop = transcript.scrollHeight;
+  return div;
+}
+
+function setActivity(bubble, main, detail = "") {
+  const t = bubble.querySelector(".activity-text");
+  const d = bubble.querySelector(".activity-detail");
+  if (t) t.textContent = main;
+  if (d) {
+    d.textContent = detail || "";
+    d.style.display = detail ? "block" : "none";
+  }
+  transcript.scrollTop = transcript.scrollHeight;
+}
+
+function setRunStatus(active, text) {
+  const bar = document.getElementById("runStatus");
+  const label = document.getElementById("runStatusText");
+  const btn = document.getElementById("sendBtn");
+  if (!bar || !label) return;
+  if (active) {
+    bar.classList.remove("hidden");
+    label.textContent = text || "Working…";
+    btn.classList.add("is-running");
+    btn.textContent = "Running…";
+  } else {
+    bar.classList.add("hidden");
+    btn.classList.remove("is-running");
+    btn.textContent = "Run agent";
+  }
+}
+
 async function loadHealth() {
   try {
     const r = await fetch("/api/health");
@@ -98,7 +141,14 @@ document.getElementById("composer").addEventListener("submit", async (e) => {
   addBubble("user", message);
   promptEl.value = "";
 
-  const thinking = addBubble("thinking", "Agent is working…");
+  const activity = createActivityBubble();
+  let activityTimer = null;
+  const startedAt = Date.now();
+  activityTimer = setInterval(() => {
+    const s = Math.floor((Date.now() - startedAt) / 1000);
+    setActivity(activity, `Agent is working… (${s}s)`, activity?.querySelector(".activity-detail")?.textContent || "");
+  }, 1000);
+  setRunStatus(true, "Agent is working…");
 
   const body = {
     message,
@@ -130,7 +180,22 @@ document.getElementById("composer").addEventListener("submit", async (e) => {
         if (payload.type === "session") {
           sessionId = payload.session_id;
           sessionLabel.textContent = `Session ${sessionId.slice(0, 8)}…`;
+        } else if (payload.type === "thinking") {
+          const step = payload.data.step ?? "?";
+          setActivity(activity, `Thinking · step ${step}`, "Waiting for the model…");
+          setRunStatus(true, `Step ${step} · thinking…`);
+        } else if (payload.type === "status") {
+          const msg = payload.data.message || "Working…";
+          const phase = payload.data.phase || "";
+          setActivity(activity, msg, phase ? `Phase: ${phase}` : "");
+          setRunStatus(true, msg);
         } else if (payload.type === "tool_call") {
+          setActivity(
+            activity,
+            `Tool: ${payload.data.name}`,
+            "Executing…"
+          );
+          setRunStatus(true, `Running ${payload.data.name}…`);
           const args = payload.data.arguments || {};
           const brief = Object.entries(args)
             .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
@@ -142,21 +207,25 @@ document.getElementById("composer").addEventListener("submit", async (e) => {
               : `▸ ${payload.data.name}`,
           );
         } else if (payload.type === "tool_result") {
-          addBubble("tool", `✓ ${payload.data.name}\n${payload.data.result}`);
+          const preview = (payload.data.result || "").slice(0, 280);
+          addBubble("tool", `✓ ${payload.data.name}\n${preview}`);
+          setActivity(activity, `Finished ${payload.data.name}`, "Waiting for model…");
         } else if (payload.type === "assistant_message") {
-          thinking.remove();
           assistantBubble = addBubble("assistant", payload.data.content);
         } else if (payload.type === "done") {
-          thinking.remove();
+          activity.remove();
         }
       }
     }
-    if (!assistantBubble) thinking.remove();
+    if (!assistantBubble) activity.remove();
   } catch (err) {
-    thinking.remove();
+    activity.remove();
     addBubble("assistant", `Error: ${err.message}`);
   } finally {
+    if (activityTimer) clearInterval(activityTimer);
+    setRunStatus(false);
     sendBtn.disabled = false;
+    if (activity.parentNode) activity.remove();
   }
 });
 

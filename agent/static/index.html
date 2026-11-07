@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ollama Cursor Agent</title>
-    <link rel="stylesheet" href="/styles.css?v=0.2.6" />
+    <link rel="stylesheet" href="/styles.css?v=0.2.7" />
   </head>
   <body>
     <div class="app">
@@ -63,6 +63,10 @@
             rows="3"
             placeholder="Describe a coding task for the agent…"
           ></textarea>
+          <div id="runStatus" class="run-status hidden" aria-live="polite">
+            <span class="spinner" aria-hidden="true"></span>
+            <span id="runStatusText">Working…</span>
+          </div>
           <div class="composer-actions">
             <span id="sessionLabel" class="session-label"></span>
             <button type="submit" class="btn primary" id="sendBtn">Run agent</button>
@@ -70,6 +74,6 @@
         </form>
       </main>
     </div>
-    <script src="/app.js?v=0.2.6"></script>
+    <script src="/app.js?v=0.2.7"></script>
   </body>
 </html>
