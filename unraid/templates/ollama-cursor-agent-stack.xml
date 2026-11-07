@@ -2,7 +2,7 @@
 <Container version="2">
   <Name>ollama-cursor-agent-stack</Name>
   <Repository>ghcr.io/killamfkr/ollama-cursor-agent:latest</Repository>
-  <Registry>https://github.com/killamfkr/ollama-cursor-agent</Registry>
+  <Registry>https://ghcr.io</Registry>
   <Network>bridge</Network>
   <Shell>bash</Shell>
   <Privileged>false</Privileged>

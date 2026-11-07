@@ -1,5 +1,8 @@
 FROM python:3.12-slim-bookworm
 
+ARG APP_VERSION=0.2.2
+LABEL org.opencontainers.image.version="${APP_VERSION}"
+
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \

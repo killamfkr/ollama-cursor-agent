@@ -90,7 +90,32 @@ Forward port **8080** (reverse proxy, Tailscale, etc.) so GitHub can reach Unrai
 
 ```bash
 curl -s "http://<UNRAID-IP>:8080/api/health"
+curl -s "http://<UNRAID-IP>:8080/api/config" | grep version
 ```
+
+You should see **`"version":"0.2.2"`** (or newer) after updating the container image.
+
+## Updates (when Unraid does not show one)
+
+Unraid often **does not flag** a new `ghcr.io/...:latest` image. The GitHub Actions build may already be done while Docker still shows no update.
+
+**1. Pull the image** (Unraid terminal or SSH):
+
+```bash
+docker pull ghcr.io/killamfkr/ollama-cursor-agent:latest
+```
+
+**2. Recreate the container** — Docker → **ollama-cursor-agent** → Stop → start again, or enable **Advanced view** → **Force update** / re-apply the template.
+
+**3. Refresh the Private Apps template** (new paths like Agent data, repo UI):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/killamfkr/ollama-cursor-agent/main/unraid/install-templates.sh | bash
+```
+
+Then **Apps → Private Apps** → find **ollama-cursor-agent** → **Actions → Update** (or edit and Apply).
+
+**4. GHCR login** (if pull fails with “unauthorized”): Docker → **Add Registry** → `https://ghcr.io`, username = your GitHub user, password = GitHub PAT with `read:packages`. The package must be **public**, or your account needs package access.
 
 ## Files
 

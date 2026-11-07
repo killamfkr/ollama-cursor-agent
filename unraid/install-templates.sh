@@ -3,7 +3,7 @@
 set -euo pipefail
 
 REPO_RAW="${REPO_RAW:-https://raw.githubusercontent.com/killamfkr/ollama-cursor-agent/main/unraid}"
-DEST="${DEST:-/boot/config/plugins/community.applications/private/cellar-loader}"
+DEST="${DEST:-/boot/config/plugins/community.applications/private/ollama-cursor-agent}"
 
 if [[ ! -d /boot/config ]]; then
   echo "This script is meant to run on Unraid (expected /boot/config)." >&2
@@ -21,5 +21,14 @@ if [[ -d "$TUSER" ]]; then
   echo "Also copied to Docker templates-user: $TUSER"
 fi
 
+# Legacy path from an older template pack name
+LEGACY="${LEGACY_DEST:-/boot/config/plugins/community.applications/private/cellar-loader}"
+if [[ -d "$LEGACY" && "$LEGACY" != "$DEST" ]]; then
+  cp -f "$DEST/ollama.xml" "$LEGACY/ollama.xml" 2>/dev/null || true
+  cp -f "$DEST/ollama-cursor-agent.xml" "$LEGACY/ollama-cursor-agent.xml" 2>/dev/null || true
+  echo "Also refreshed legacy Private Apps folder: $LEGACY"
+fi
+
 echo "Templates installed under: $DEST"
-echo "Open Apps → Private Apps → install ollama, then ollama-cursor-agent."
+echo "Open Apps → Private Apps → Actions → Update (or reinstall) on ollama-cursor-agent."
+echo "Image is published as ghcr.io/killamfkr/ollama-cursor-agent:latest — pull manually if Docker does not show an update."

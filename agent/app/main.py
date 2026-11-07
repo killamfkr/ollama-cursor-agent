@@ -27,6 +27,7 @@ from .github_prefs import (
 from .github_jobs import job_store
 from .github_webhook import handle_github_event, verify_signature
 from .ollama_client import OllamaClient
+from .__version__ import __version__
 
 
 @asynccontextmanager
@@ -36,7 +37,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Ollama Cursor Agent", version="0.2.1", lifespan=lifespan)
+app = FastAPI(title="Ollama Cursor Agent", version=__version__, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -72,7 +73,7 @@ async def health() -> dict[str, Any]:
     ollama = OllamaClient()
     try:
         models = await ollama.list_models()
-        return {"ok": True, "ollama": True, "models": models}
+        return {"ok": True, "ollama": True, "version": __version__, "models": models}
     except Exception as e:
         return {"ok": False, "ollama": False, "error": str(e)}
 
@@ -80,6 +81,7 @@ async def health() -> dict[str, Any]:
 @app.get("/api/config")
 async def get_config() -> dict[str, Any]:
     return {
+        "version": __version__,
         "default_model": settings.default_model,
         "workspace_root": settings.workspace_root,
         "max_agent_steps": settings.max_agent_steps,
