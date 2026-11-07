@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -95,6 +96,21 @@ class AgentStore:
 
 store = AgentStore()
 
+_INSPECT_PROMISE = re.compile(
+    r"\b(i'll|i will|let me|i'm going to)\b.*\b(inspect|look at|check|explore|investigate)\b",
+    re.IGNORECASE,
+)
+
+
+def _is_inspect_promise_only(text: str) -> bool:
+    t = text.strip()
+    if not t or len(t) > 500:
+        return False
+    if _INSPECT_PROMISE.search(t):
+        return True
+    low = t.lower()
+    return ("inspect" in low or "repository" in low) and len(t.split()) < 35 and "?" not in t
+
 
 async def run_agent_turn(
     session: Session,
@@ -111,6 +127,13 @@ async def run_agent_turn(
     for step in range(settings.max_agent_steps):
         if on_event:
             await on_event(session.append_event("thinking", step=step + 1))
+            await on_event(
+                session.append_event(
+                    "status",
+                    phase="ollama",
+                    message=f"Asking {session.model} (step {step + 1} of {settings.max_agent_steps})…",
+                )
+            )
 
         response = await ollama.chat(session.messages, model=session.model, tools=True)
         msg = response.get("message", {})
@@ -144,6 +167,13 @@ async def run_agent_turn(
                     await on_event(
                         session.append_event("tool_call", name=name, arguments=args)
                     )
+                    await on_event(
+                        session.append_event(
+                            "status",
+                            phase="tool",
+                            message=f"Running {name}…",
+                        )
+                    )
 
                 result = await execute_tool(name, args)
 
@@ -168,6 +198,26 @@ async def run_agent_turn(
         if content.strip() and not ollama_tool_calls(
             {"content": content, "tool_calls": []}
         ):
+            if _is_inspect_promise_only(content) and step < settings.max_agent_steps - 1:
+                if on_event:
+                    await on_event(
+                        session.append_event(
+                            "status",
+                            phase="continue",
+                            message="Continuing — model must use tools before answering…",
+                        )
+                    )
+                session.messages.append({"role": "assistant", "content": content})
+                session.messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "Do not reply with intentions only. Use tools now "
+                            "(list_directory path='.', read_file README.md) and then answer."
+                        ),
+                    }
+                )
+                continue
             final_text = content.strip()
             if on_event:
                 await on_event(session.append_event("assistant_message", content=final_text))
