@@ -30,43 +30,128 @@ def trim_messages_for_ollama(
     return system + rest[-max_turns:]
 
 
-def sanitize_messages_for_ollama(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def coerce_tool_arguments_json(raw: Any) -> str:
+    """Ensure Ollama sees valid JSON in tool_calls[].function.arguments."""
+    if isinstance(raw, dict):
+        return json.dumps(raw)
+    if not isinstance(raw, str) or not raw.strip():
+        return "{}"
+    s = raw.strip()
+    try:
+        json.loads(s)
+        return s
+    except json.JSONDecodeError:
+        pass
+    # Truncated object — close open strings/braces heuristically
+    if s.startswith("{"):
+        depth = 0
+        in_str = False
+        esc = False
+        for ch in s:
+            if esc:
+                esc = False
+                continue
+            if ch == "\\" and in_str:
+                esc = True
+                continue
+            if ch == '"':
+                in_str = not in_str
+                continue
+            if not in_str:
+                if ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+        repaired = s
+        if in_str:
+            repaired += '"'
+        repaired += "}" * max(0, depth)
+        try:
+            json.loads(repaired)
+            return repaired
+        except json.JSONDecodeError:
+            pass
+    return "{}"
+
+
+def strip_assistant_tool_calls(
+    messages: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for m in messages:
+        if m.get("role") != "assistant":
+            out.append(m)
+            continue
+        row = {"role": "assistant", "content": str(m.get("content") or "")}
+        if not row["content"] and m.get("tool_calls"):
+            names = []
+            for tc in m.get("tool_calls") or []:
+                fn = tc.get("function") or tc
+                if fn.get("name"):
+                    names.append(str(fn["name"]))
+            if names:
+                row["content"] = f"(called tools: {', '.join(names)})"
+        out.append(row)
+    return out
+
+
+def normalize_ollama_assistant_message(msg: dict[str, Any]) -> dict[str, Any]:
+    """Fix assistant messages before they enter session history."""
+    out: dict[str, Any] = {
+        "role": "assistant",
+        "content": str(msg.get("content") or ""),
+    }
+    tcs = msg.get("tool_calls")
+    if not tcs:
+        return out
+    fixed: list[dict[str, Any]] = []
+    for tc in tcs:
+        fn = tc.get("function") or tc
+        name = str(fn.get("name") or "").strip()
+        if not name:
+            continue
+        fixed.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "arguments": coerce_tool_arguments_json(
+                        fn.get("arguments", fn.get("parameters", "{}"))
+                    ),
+                },
+            }
+        )
+    if fixed:
+        out["tool_calls"] = fixed
+        if out["content"].strip().startswith("{"):
+            out["content"] = ""
+    return out
+
+
+def sanitize_messages_for_ollama(
+    messages: list[dict[str, Any]], *, max_tool_content: int = 12000
+) -> list[dict[str, Any]]:
     """Shape messages for Ollama /api/chat (tool_name required on tool results)."""
     out: list[dict[str, Any]] = []
     for m in messages:
         role = m.get("role")
         if role == "tool":
+            body = str(m.get("content") or "")
+            if len(body) > max_tool_content:
+                body = (
+                    body[:max_tool_content]
+                    + f"\n…(truncated, {len(body)} chars total)"
+                )
             out.append(
                 {
                     "role": "tool",
                     "tool_name": str(m.get("tool_name") or "tool"),
-                    "content": str(m.get("content") or ""),
+                    "content": body,
                 }
             )
             continue
         if role == "assistant":
-            msg: dict[str, Any] = {
-                "role": "assistant",
-                "content": str(m.get("content") or ""),
-            }
-            tcs = m.get("tool_calls")
-            if tcs:
-                fixed: list[dict[str, Any]] = []
-                for tc in tcs:
-                    fn = tc.get("function") or tc
-                    name = fn.get("name") or ""
-                    args = fn.get("arguments", "{}")
-                    if not isinstance(args, str):
-                        args = json.dumps(args)
-                    fixed.append(
-                        {
-                            "type": "function",
-                            "function": {"name": name, "arguments": args},
-                        }
-                    )
-                if fixed:
-                    msg["tool_calls"] = fixed
-            out.append(msg)
+            out.append(normalize_ollama_assistant_message(m))
             continue
         if role in ("user", "system"):
             out.append({"role": role, "content": str(m.get("content") or "")})
@@ -144,7 +229,12 @@ class OllamaClient:
                 base["options"] = {**base.get("options", {}), "num_ctx": 4096}
                 fallbacks.append(base)
                 if allow_tool_fallback and "tools" in payload:
-                    fallbacks.append({**payload, "options": {**payload.get("options", {}), "num_ctx": 4096}})
+                    fallbacks.append(
+                        {
+                            **payload,
+                            "options": {**payload.get("options", {}), "num_ctx": 4096},
+                        }
+                    )
                 trimmed = trim_messages_for_ollama(payload["messages"], max_turns=16)
                 fallbacks.append(
                     {
@@ -152,6 +242,18 @@ class OllamaClient:
                         "messages": sanitize_messages_for_ollama(trimmed),
                     }
                 )
+                plain_history = strip_assistant_tool_calls(
+                    sanitize_messages_for_ollama(trimmed)
+                )
+                fallbacks.append({**base, "messages": plain_history})
+                if allow_tool_fallback and "tools" in payload:
+                    fallbacks.append(
+                        {
+                            **payload,
+                            "messages": plain_history,
+                            "options": {**payload.get("options", {}), "num_ctx": 4096},
+                        }
+                    )
                 for fb in fallbacks:
                     r2 = await client.post(f"{self.base_url}/api/chat", json=fb)
                     if r2.status_code < 400:
