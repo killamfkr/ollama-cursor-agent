@@ -159,6 +159,45 @@ body {
   color: var(--danger);
 }
 
+.workspace-alert {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 107, 107, 0.55);
+  background: rgba(255, 107, 107, 0.14);
+  color: #ffb8b8;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.workspace-alert.hidden {
+  display: none;
+}
+
+.workspace-alert.ok {
+  border-color: rgba(61, 214, 140, 0.45);
+  background: rgba(61, 214, 140, 0.12);
+  color: var(--success);
+}
+
+.workspace-alert-title {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+  color: inherit;
+}
+
+.workspace-alert-body {
+  margin: 0 0 0.55rem;
+}
+
+.workspace-alert .dismiss-alert {
+  font-size: 0.75rem;
+  padding: 0.35rem 0.6rem;
+}
+
 .divider {
   border: none;
   border-top: 1px solid var(--border);

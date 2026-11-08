@@ -7,6 +7,49 @@ const healthStatus = document.getElementById("healthStatus");
 const sessionLabel = document.getElementById("sessionLabel");
 const sendBtn = document.getElementById("sendBtn");
 
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function workspaceCloneMessage(payload) {
+  const d = payload?.detail !== undefined ? payload.detail : payload;
+  if (typeof d === "string") return d;
+  if (!d || typeof d !== "object") return String(d ?? "Unknown error");
+  const parts = [];
+  if (d.hint) parts.push(d.hint);
+  else if (d.error) parts.push(String(d.error));
+  else if (d.reason) parts.push(String(d.reason));
+  if (d.sample?.length) parts.push(`On disk: ${d.sample.join(", ")}`);
+  if (d.repo) parts.push(`Selected repo: ${d.repo}`);
+  if (!parts.length) return JSON.stringify(d, null, 2);
+  return parts.join("\n\n");
+}
+
+function showWorkspaceAlert(message, { title = "Workspace", ok = false } = {}) {
+  const el = document.getElementById("workspaceAlert");
+  if (!el) return;
+  if (!message) {
+    el.classList.add("hidden");
+    el.innerHTML = "";
+    return;
+  }
+  el.classList.toggle("ok", ok);
+  el.classList.toggle("hidden", false);
+  el.innerHTML = `
+    <span class="workspace-alert-title">${escapeHtml(title)}</span>
+    <p class="workspace-alert-body">${escapeHtml(message)}</p>
+    <button type="button" class="btn secondary dismiss-alert">Dismiss</button>
+  `;
+  el.querySelector(".dismiss-alert")?.addEventListener("click", () => {
+    el.classList.add("hidden");
+    el.innerHTML = "";
+  });
+}
+
 function addBubble(kind, text, html = false) {
   const div = document.createElement("div");
   div.className = `bubble ${kind}`;
@@ -293,10 +336,19 @@ async function setGithubRepo(fullName) {
   if (data.clone) {
     const ws = document.getElementById("workspaceStatus");
     if (data.clone.ok) {
+      showWorkspaceAlert(
+        `${data.clone.action} ${data.clone.repo || data.repo} into workspace.`,
+        { title: "Workspace updated", ok: true }
+      );
       ws.textContent = `Workspace: ${data.clone.action} ${data.repo}`;
       ws.className = "status ok";
-    } else if (data.clone.action === "blocked") {
-      ws.textContent = data.clone.hint || "Workspace not empty — mount an empty folder.";
+    } else {
+      const title =
+        data.clone.action === "blocked"
+          ? "Could not add repo to workspace"
+          : "Clone failed";
+      showWorkspaceAlert(workspaceCloneMessage(data.clone), { title });
+      ws.textContent = data.clone.hint || title;
       ws.className = "status bad";
     }
   }
@@ -327,16 +379,33 @@ async function loadWorkspaceStatus() {
 
 document.getElementById("cloneWorkspace").addEventListener("click", async () => {
   const el = document.getElementById("workspaceStatus");
+  showWorkspaceAlert(null);
   el.textContent = "Cloning / pulling…";
   el.className = "status";
   try {
     const r = await fetch("/api/workspace/clone", { method: "POST" });
     const data = await r.json();
-    if (!r.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || data));
+    if (!r.ok) {
+      const msg = workspaceCloneMessage(data);
+      const title =
+        data.detail?.action === "blocked" || data.action === "blocked"
+          ? "Could not clone — workspace not empty"
+          : "Clone failed";
+      showWorkspaceAlert(msg, { title });
+      el.textContent = title;
+      el.className = "status bad";
+      await loadWorkspaceStatus();
+      return;
+    }
+    showWorkspaceAlert(`${data.action}: ${data.repo}`, {
+      title: "Workspace updated",
+      ok: true,
+    });
     el.textContent = `${data.action}: ${data.repo}`;
     el.className = "status ok";
   } catch (e) {
-    el.textContent = `Clone failed: ${e.message}`;
+    showWorkspaceAlert(String(e.message), { title: "Clone failed" });
+    el.textContent = "Clone failed";
     el.className = "status bad";
   }
   await loadWorkspaceStatus();
@@ -403,6 +472,7 @@ document.getElementById("repoSelect").addEventListener("change", async (e) => {
     const el = document.getElementById("githubStatus");
     el.textContent = `Could not set repo: ${err.message}`;
     el.className = "status bad";
+    showWorkspaceAlert(err.message, { title: "Could not set repository" });
   }
 });
 
