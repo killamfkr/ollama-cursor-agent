@@ -237,6 +237,7 @@ async def run_agent_turn(
             session.messages.append(msg)
 
         if calls:
+            stop_after_tools = False
             for call in calls:
                 name = call["name"]
                 args = call["arguments"]
@@ -255,12 +256,48 @@ async def run_agent_turn(
 
                 result = await execute_tool(name, args)
 
+                if name == "describe_project":
+                    try:
+                        payload = json.loads(result)
+                        summary = (payload.get("summary_for_user") or "").strip()
+                        if summary:
+                            final_text = summary
+                            stop_after_tools = True
+                            if on_event:
+                                await on_event(
+                                    session.append_event(
+                                        "assistant_message", content=final_text
+                                    )
+                                )
+                    except json.JSONDecodeError:
+                        pass
+
+                preview = result
+                if name == "describe_project":
+                    try:
+                        payload = json.loads(result)
+                        preview = json.dumps(
+                            {
+                                "summary_for_user": payload.get("summary_for_user"),
+                                "selected_repo": payload.get("selected_repo"),
+                                "workspace_synced_with_selection": payload.get(
+                                    "workspace_synced_with_selection"
+                                ),
+                                "workspace_origin_repo": payload.get(
+                                    "workspace_origin_repo"
+                                ),
+                            },
+                            indent=2,
+                        )
+                    except json.JSONDecodeError:
+                        preview = result[:4000]
+
                 if on_event:
                     await on_event(
                         session.append_event(
                             "tool_result",
                             name=name,
-                            result=result[:4000] if len(result) > 4000 else result,
+                            result=preview[:4000] if len(preview) > 4000 else preview,
                         )
                     )
 
@@ -271,6 +308,8 @@ async def run_agent_turn(
                         "content": result,
                     }
                 )
+            if stop_after_tools:
+                break
             continue
 
         if content.strip() and not ollama_tool_calls(
