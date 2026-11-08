@@ -121,6 +121,15 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "describe_project",
+        "description": (
+            "ONE-SHOT overview for questions like 'what is this repo?': clone into workspace if "
+            "needed, list top-level files, and return README from disk or GitHub API. "
+            "Use this instead of github_get_issue."
+        ),
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
         "name": "github_readme",
         "description": (
             "Fetch README from the configured GitHub repo via API (when workspace is empty "
@@ -130,7 +139,9 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "github_get_issue",
-        "description": "Fetch a GitHub issue (title, body, comments) for the configured repo.",
+        "description": (
+            "Fetch ONE GitHub issue by number (must be >= 1). Never use for 'what is this repo' — use describe_project."
+        ),
         "parameters": {
             "type": "object",
             "properties": {
@@ -410,11 +421,48 @@ async def _list_directory_maybe_clone(path: str = ".") -> str:
     return json.dumps(data, indent=2)
 
 
+async def _describe_project() -> str:
+    repo = effective_github_repo()
+    listing_raw = await _list_directory_maybe_clone(".")
+    listing = json.loads(listing_raw)
+    readme_excerpt: str | None = None
+    readme_path = Path(settings.workspace_root).resolve() / "README.md"
+    if readme_path.is_file():
+        readme_excerpt = _read_file("README.md", limit=200)
+    gh_readme: dict[str, Any] | None = None
+    if not readme_excerpt or readme_excerpt == "(empty file)":
+        try:
+            gh = GitHubClient()
+            gh_readme = await gh.get_readme()
+        except GitHubError as e:
+            gh_readme = {"error": e.message, "status": e.status}
+    return json.dumps(
+        {
+            "repo": repo or None,
+            "workspace": listing,
+            "readme_local_excerpt": readme_excerpt,
+            "readme_github_api": gh_readme,
+            "instruction": "Summarize what this project does for the user in plain language.",
+        },
+        indent=2,
+    )
+
+
 async def execute_tool(name: str, arguments: dict[str, Any]) -> str:
     from .tool_calls import resolve_tool_name
 
     name = resolve_tool_name(name)
     try:
+        if name == "github_get_issue":
+            try:
+                number = int(arguments.get("number") or 0)
+            except (TypeError, ValueError):
+                number = 0
+            if number < 1:
+                name = "describe_project"
+                arguments = {}
+        if name == "describe_project":
+            return await _describe_project()
         if name == "list_directory":
             return await _list_directory_maybe_clone(arguments.get("path", "."))
         if name == "read_file":
