@@ -8,7 +8,11 @@ from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Callable, Awaitable
 
 from .config import settings
-from .ollama_client import OllamaChatError, OllamaClient
+from .ollama_client import (
+    OllamaChatError,
+    OllamaClient,
+    normalize_ollama_assistant_message,
+)
 from .tools import execute_tool
 from .tool_calls import ollama_tool_calls
 from .workspace_context import workspace_context_block
@@ -209,7 +213,7 @@ async def run_agent_turn(
                 await on_event(session.append_event("assistant_message", content=hint))
             break
 
-        msg = response.get("message", {})
+        msg = normalize_ollama_assistant_message(response.get("message", {}))
         content = msg.get("content") or ""
         calls = ollama_tool_calls(msg)
 
@@ -220,10 +224,11 @@ async def run_agent_turn(
             stored["content"] = ""
             stored["tool_calls"] = [
                 {
+                    "type": "function",
                     "function": {
                         "name": c["name"],
                         "arguments": json.dumps(c["arguments"]),
-                    }
+                    },
                 }
                 for c in calls
             ]
