@@ -508,3 +508,22 @@ loadGithub();
 loadJobs();
 loadAppMeta();
 loadWorkspaceStatus();
+
+function setSidebarOpen(open) {
+  document.body.classList.toggle("sidebar-open", open);
+  const backdrop = document.getElementById("sidebarBackdrop");
+  if (backdrop) backdrop.style.display = open ? "block" : "none";
+}
+
+const sidebarToggle = document.getElementById("sidebarToggle");
+const sidebarClose = document.getElementById("sidebarClose");
+const sidebarBackdrop = document.getElementById("sidebarBackdrop");
+if (sidebarToggle) {
+  sidebarToggle.addEventListener("click", () => setSidebarOpen(true));
+}
+if (sidebarClose) {
+  sidebarClose.addEventListener("click", () => setSidebarOpen(false));
+}
+if (sidebarBackdrop) {
+  sidebarBackdrop.addEventListener("click", () => setSidebarOpen(false));
+}

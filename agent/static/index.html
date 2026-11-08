@@ -4,18 +4,24 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ollama Cursor Agent</title>
-    <link rel="stylesheet" href="/styles.css?v=0.3.2" />
+    <link rel="stylesheet" href="/styles.css?v=0.3.3" />
   </head>
   <body>
+    <div class="sidebar-backdrop-hit" id="sidebarBackdrop" aria-hidden="true"></div>
     <div class="app">
-      <aside class="sidebar">
-        <div class="brand">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-top">
+          <div class="brand">
           <span class="logo">◈</span>
           <div>
             <h1>Ollama Agent</h1>
             <p>Local Cursor-style coding agent</p>
             <p class="app-version" id="appVersion"></p>
           </div>
+          </div>
+          <button type="button" id="sidebarClose" class="btn secondary sidebar-close" aria-label="Close setup">
+            Close
+          </button>
         </div>
         <label class="field">
           <span>Model</span>
@@ -56,6 +62,11 @@
         <div class="status" id="healthStatus">Checking Ollama…</div>
       </aside>
       <main class="main">
+        <header class="main-header">
+          <button type="button" id="sidebarToggle" class="btn secondary sidebar-toggle">
+            Setup · GitHub · Model
+          </button>
+        </header>
         <section class="transcript" id="transcript"></section>
         <form class="composer" id="composer">
           <textarea
@@ -74,6 +85,6 @@
         </form>
       </main>
     </div>
-    <script src="/app.js?v=0.3.2"></script>
+    <script src="/app.js?v=0.3.3"></script>
   </body>
 </html>
