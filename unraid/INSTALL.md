@@ -86,6 +86,10 @@ Unraid 8 compose installer: [`templates/ollama-cursor-agent-stack.xml`](template
 Webhook URL: `https://<public-host>/api/github/webhook` (Issues + Issue comments).  
 Forward port **8080** (reverse proxy, Tailscale, etc.) so GitHub can reach Unraid.
 
+## Ollama `400 Bad Request` on chat
+
+Usually means the **Ollama version is old**, the **model does not support tools**, or tool messages were malformed. Update the Ollama container to a recent release, pull a tool-capable model (`qwen2.5-coder:7b` or `llama3.1`), and use agent **v0.3.0+** (sanitizes `tool_name` and retries without tools).
+
 ## Verify
 
 ```bash
