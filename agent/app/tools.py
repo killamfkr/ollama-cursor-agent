@@ -20,7 +20,11 @@ from .git_ops import (
     git_status,
 )
 from .github_client import GitHubClient, GitHubError
-from .github_prefs import effective_github_repo, token_configured
+from .github_prefs import (
+    detect_repo_from_workspace,
+    effective_github_repo,
+    token_configured,
+)
 from .workspace_sync import ensure_workspace_has_repo
 
 
@@ -423,26 +427,67 @@ async def _list_directory_maybe_clone(path: str = ".") -> str:
 
 async def _describe_project() -> str:
     repo = effective_github_repo()
+    workspace_origin = detect_repo_from_workspace()
+    synced = bool(
+        repo
+        and workspace_origin
+        and repo.lower() == workspace_origin.lower()
+    )
     listing_raw = await _list_directory_maybe_clone(".")
     listing = json.loads(listing_raw)
+
     readme_excerpt: str | None = None
+    readme_local_note: str | None = None
     readme_path = Path(settings.workspace_root).resolve() / "README.md"
-    if readme_path.is_file():
+    if not synced:
+        readme_local_note = (
+            f"Skipped local README.md — workspace git origin is "
+            f"{workspace_origin or '(not a git repo)'} but the selected repo is {repo}. "
+            "Use readme_github_api.content for the selected repo, or clone the selected repo "
+            "into an empty workspace mount."
+        )
+    elif readme_path.is_file():
         readme_excerpt = _read_file("README.md", limit=200)
+        if readme_excerpt == "(empty file)":
+            readme_excerpt = None
+
     gh_readme: dict[str, Any] | None = None
-    if not readme_excerpt or readme_excerpt == "(empty file)":
+    need_api = not synced or not readme_excerpt
+    if need_api and repo and token_configured():
         try:
-            gh = GitHubClient()
+            gh = GitHubClient(repo=repo)
             gh_readme = await gh.get_readme()
         except GitHubError as e:
-            gh_readme = {"error": e.message, "status": e.status}
+            gh_readme = {"error": e.message, "status": e.status, "repo": repo}
+    elif not token_configured() and not synced:
+        gh_readme = {
+            "error": "AGENT_GITHUB_TOKEN not set",
+            "hint": "Set token to fetch README for the selected repo while workspace is out of sync.",
+        }
+
+    if synced and not readme_excerpt and repo and token_configured():
+        try:
+            gh = GitHubClient(repo=repo)
+            gh_readme = await gh.get_readme()
+        except GitHubError as e:
+            gh_readme = {"error": e.message, "status": e.status, "repo": repo}
+
+    instruction = (
+        "Summarize what this project does for the user in plain language. "
+        "Base the summary ONLY on readme for `selected_repo` (readme_github_api when present). "
+        "If workspace_origin differs from selected_repo, say they must clone the selected repo "
+        "and do NOT describe README from the wrong on-disk project."
+    )
     return json.dumps(
         {
-            "repo": repo or None,
+            "selected_repo": repo or None,
+            "workspace_origin_repo": workspace_origin or None,
+            "workspace_synced_with_selection": synced,
             "workspace": listing,
             "readme_local_excerpt": readme_excerpt,
+            "readme_local_note": readme_local_note,
             "readme_github_api": gh_readme,
-            "instruction": "Summarize what this project does for the user in plain language.",
+            "instruction": instruction,
         },
         indent=2,
     )
