@@ -43,9 +43,10 @@ Behaviors:
 - Only use GitHub tools when the user names an issue number or asks for PR/issue work. Never call github_get_issue without a positive issue number.
 - When the task is a GitHub issue, implement through branch → commit → push → PR.
 {gh_note}
-Tools: list_directory, read_file, write_file, search_files, glob_files, run_shell,
+For "what is this repo / what does it do" → call **describe_project** only.
+Tools: describe_project, list_directory, read_file, write_file, search_files, glob_files, run_shell,
 clone_workspace_repo, git_status, git_checkout_branch, git_commit, git_push,
-github_readme, github_get_issue, github_post_comment, github_create_pull_request.
+github_readme, github_get_issue (issue # >= 1 only), github_post_comment, github_create_pull_request.
 All file paths are relative to the workspace root.
 
 Call tools via native tool_calls (not JSON in the chat text).
@@ -122,6 +123,21 @@ async def run_agent_turn(
     session.messages.append({"role": "user", "content": user_message})
     if on_event:
         await on_event(session.append_event("user_message", content=user_message))
+
+    if re.search(
+        r"\b(what is this repo|what does (it|this repo|remux) do|describe (this )?(repo|project))\b",
+        user_message,
+        re.I,
+    ):
+        session.messages.append(
+            {
+                "role": "user",
+                "content": (
+                    "System: answer with describe_project (clone + README). "
+                    "Do NOT call github_get_issue or github_get_issue with number 0."
+                ),
+            }
+        )
 
     from .github_prefs import token_configured
     from .workspace_sync import ensure_workspace_has_repo, workspace_status

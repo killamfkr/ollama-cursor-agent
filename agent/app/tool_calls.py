@@ -56,10 +56,20 @@ def normalize_tool_arguments(name: str, args: dict[str, Any]) -> dict[str, Any]:
         except (TypeError, ValueError):
             n = 0
         if n < 1:
-            args = dict(args)
-            args.pop("number", None)
+            return {}  # execute_tool reroutes to describe_project
 
     return args
+
+
+def maybe_reroute_overview_tool(name: str, args: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    if name == "github_get_issue":
+        try:
+            n = int(args.get("number") or 0)
+        except (TypeError, ValueError):
+            n = 0
+        if n < 1:
+            return "describe_project", {}
+    return name, args
 
 
 def _args_from_function(fn: dict[str, Any]) -> dict[str, Any]:
@@ -83,7 +93,9 @@ def ollama_tool_calls(message: dict[str, Any]) -> list[dict[str, Any]]:
         if not name:
             continue
         args = _args_from_function(fn)
-        out.append({"name": name, "arguments": normalize_tool_arguments(name, args)})
+        args = normalize_tool_arguments(name, args)
+        name, args = maybe_reroute_overview_tool(name, args)
+        out.append({"name": name, "arguments": args})
 
     if out:
         return out
