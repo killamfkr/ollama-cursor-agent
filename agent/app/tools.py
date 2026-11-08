@@ -28,6 +28,45 @@ from .github_prefs import (
 from .workspace_sync import ensure_workspace_has_repo
 
 
+def _summary_from_readme(markdown: str, repo: str) -> str:
+    """Short plain-language blurb from README (avoids model hallucination)."""
+    text = (markdown or "").replace("\r\n", "\n")
+    lines = text.split("\n")
+    title = ""
+    for line in lines:
+        s = line.strip()
+        if s.startswith("# "):
+            title = s[2:].strip()
+            break
+    tagline_parts: list[str] = []
+    started = False
+    for line in lines:
+        s = line.strip()
+        if not s or s.startswith("<!--"):
+            continue
+        if s.startswith("#"):
+            if title and started:
+                break
+            if s.startswith("# "):
+                title = title or s[2:].strip()
+            continue
+        if s.startswith(">") or s.startswith("!["):
+            continue
+        started = True
+        tagline_parts.append(s)
+        joined = " ".join(tagline_parts)
+        if len(joined) > 420:
+            break
+    tagline = re.sub(r"\*\*([^*]+)\*\*", r"\1", " ".join(tagline_parts).strip())
+    if tagline:
+        if title and title.lower() not in tagline.lower()[: len(title) + 2]:
+            return f"{title}: {tagline}" if title else tagline
+        return tagline
+    if title:
+        return title
+    return f"Open-source project ({repo})." if repo else "Project README found."
+
+
 def _resolve_safe(path: str) -> Path:
     root = Path(settings.workspace_root).resolve()
     target = (root / path.lstrip("/")).resolve()
@@ -472,22 +511,46 @@ async def _describe_project() -> str:
         except GitHubError as e:
             gh_readme = {"error": e.message, "status": e.status, "repo": repo}
 
-    instruction = (
-        "Summarize what this project does for the user in plain language. "
-        "Base the summary ONLY on readme for `selected_repo` (readme_github_api when present). "
-        "If workspace_origin differs from selected_repo, say they must clone the selected repo "
-        "and do NOT describe README from the wrong on-disk project."
+    readme_source = ""
+    if synced and readme_excerpt:
+        readme_source = readme_excerpt
+    elif isinstance(gh_readme, dict) and gh_readme.get("found"):
+        readme_source = str(gh_readme.get("content") or "")
+
+    summary_for_user = (
+        _summary_from_readme(readme_source, repo or "") if readme_source else ""
     )
+    if not summary_for_user and repo:
+        if isinstance(gh_readme, dict) and gh_readme.get("error"):
+            summary_for_user = (
+                f"Selected repo is {repo}. Could not load README from GitHub "
+                f"({gh_readme.get('error')}). Check AGENT_GITHUB_TOKEN and that the repo exists."
+            )
+        elif not synced:
+            summary_for_user = (
+                f"Selected repo is **{repo}**, but this workspace is not a clone of it "
+                f"(git origin: {workspace_origin or 'missing / broken .git only'}). "
+                "Use **Clone into workspace** on an empty mount, then ask again."
+            )
+
+    gh_payload = gh_readme
+    if isinstance(gh_readme, dict) and gh_readme.get("content"):
+        gh_payload = {**gh_readme, "content": str(gh_readme["content"])[:2500]}
+
     return json.dumps(
         {
+            "summary_for_user": summary_for_user or None,
             "selected_repo": repo or None,
             "workspace_origin_repo": workspace_origin or None,
             "workspace_synced_with_selection": synced,
             "workspace": listing,
             "readme_local_excerpt": readme_excerpt,
             "readme_local_note": readme_local_note,
-            "readme_github_api": gh_readme,
-            "instruction": instruction,
+            "readme_github_api": gh_payload,
+            "instruction": (
+                "Repeat summary_for_user to the user. Do not invent other project names "
+                "(e.g. do not mention unrelated apps like 'Stories')."
+            ),
         },
         indent=2,
     )
