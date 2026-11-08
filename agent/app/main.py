@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -341,9 +342,22 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
     async def event_stream():
         meta = {"type": "session", "session_id": session.id, "model": session.model}
         yield f"data: {json.dumps(meta)}\n\n"
-        async for ev in stream_agent_turn(session, req.message):
-            payload = {"type": ev.type, "data": ev.data, "ts": ev.ts}
-            yield f"data: {json.dumps(payload)}\n\n"
+        try:
+            async for ev in stream_agent_turn(session, req.message):
+                payload = {"type": ev.type, "data": ev.data, "ts": ev.ts}
+                yield f"data: {json.dumps(payload)}\n\n"
+        except Exception as e:
+            err = {
+                "type": "assistant_message",
+                "data": {
+                    "content": (
+                        f"Agent stopped: {e}. "
+                        "Pull agent image v0.3.2+, update Ollama, use qwen2.5-coder."
+                    )
+                },
+                "ts": datetime.now(timezone.utc).isoformat(),
+            }
+            yield f"data: {json.dumps(err)}\n\n"
         yield "data: {\"type\": \"done\"}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
