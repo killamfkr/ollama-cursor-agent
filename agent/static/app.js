@@ -347,7 +347,11 @@ async function setGithubRepo(fullName) {
         data.clone.action === "blocked"
           ? "Could not add repo to workspace"
           : "Clone failed";
-      showWorkspaceAlert(workspaceCloneMessage(data.clone), { title });
+      const extra =
+        data.clone.action === "blocked"
+          ? "\n\nUse **Replace workspace & clone** to wipe /workspace and clone the selected repo."
+          : "";
+      showWorkspaceAlert(workspaceCloneMessage(data.clone) + extra, { title });
       ws.textContent = data.clone.hint || title;
       ws.className = "status bad";
     }
@@ -376,6 +380,59 @@ async function loadWorkspaceStatus() {
     el.textContent = "";
   }
 }
+
+async function runWorkspaceReplace() {
+  const repo =
+    selectedRepo ||
+    document.getElementById("repoSelect")?.value ||
+    "";
+  if (!repo) {
+    showWorkspaceAlert("Pick a repository first.", { title: "No repository" });
+    return;
+  }
+  const ok = window.confirm(
+    `DELETE all files under /workspace and clone ${repo}?\n\n` +
+      "This cannot be undone. Unraid files on the host mount will be removed."
+  );
+  if (!ok) return;
+
+  const el = document.getElementById("workspaceStatus");
+  showWorkspaceAlert(null);
+  el.textContent = "Clearing workspace and cloning…";
+  el.className = "status";
+  try {
+    const r = await fetch("/api/workspace/replace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirm: true, repo }),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      const msg = workspaceCloneMessage(data);
+      showWorkspaceAlert(msg, { title: "Replace workspace failed" });
+      el.textContent = "Replace failed";
+      el.className = "status bad";
+      await loadWorkspaceStatus();
+      return;
+    }
+    const n = data.cleared?.removed?.length ?? 0;
+    showWorkspaceAlert(
+      data.message || `Cloned ${data.repo} (removed ${n} items).`,
+      { title: "Workspace replaced", ok: true }
+    );
+    el.textContent = `Workspace: ${data.repo} (${data.action})`;
+    el.className = "status ok";
+  } catch (e) {
+    showWorkspaceAlert(String(e.message), { title: "Replace workspace failed" });
+    el.textContent = "Replace failed";
+    el.className = "status bad";
+  }
+  await loadWorkspaceStatus();
+}
+
+document.getElementById("replaceWorkspace").addEventListener("click", () => {
+  runWorkspaceReplace();
+});
 
 document.getElementById("cloneWorkspace").addEventListener("click", async () => {
   const el = document.getElementById("workspaceStatus");

@@ -28,7 +28,11 @@ from .github_prefs import (
 from .github_jobs import job_store
 from .github_webhook import handle_github_event, verify_signature
 from .ollama_client import OllamaClient
-from .workspace_sync import ensure_workspace_has_repo, workspace_status
+from .workspace_sync import (
+    ensure_workspace_has_repo,
+    replace_workspace_with_repo,
+    workspace_status,
+)
 from .__version__ import __version__
 
 
@@ -77,6 +81,17 @@ class RunIssueRequest(BaseModel):
 
 class GitHubRepoRequest(BaseModel):
     repo: str
+
+
+class WorkspaceReplaceRequest(BaseModel):
+    confirm: bool = Field(
+        ...,
+        description="Must be true — deletes all files under /workspace before cloning",
+    )
+    repo: str | None = Field(
+        default=None,
+        description="Optional owner/name; defaults to the UI-selected repo",
+    )
 
 
 @app.get("/api/health")
@@ -191,6 +206,24 @@ async def post_workspace_clone() -> dict[str, Any]:
     result = await ensure_workspace_has_repo()
     if not result.get("ok") and result.get("action") == "blocked":
         raise HTTPException(status_code=409, detail=result)
+    if not result.get("ok"):
+        raise HTTPException(status_code=502, detail=result)
+    return result
+
+
+@app.post("/api/workspace/replace")
+async def post_workspace_replace(body: WorkspaceReplaceRequest) -> dict[str, Any]:
+    if not body.confirm:
+        raise HTTPException(
+            status_code=400,
+            detail="Set confirm=true to delete workspace contents and clone",
+        )
+    if not token_configured():
+        raise HTTPException(status_code=400, detail="GitHub token required to clone")
+    repo = (body.repo or effective_github_repo() or "").strip()
+    if not repo:
+        raise HTTPException(status_code=400, detail="No repository selected")
+    result = await replace_workspace_with_repo(repo)
     if not result.get("ok"):
         raise HTTPException(status_code=502, detail=result)
     return result
