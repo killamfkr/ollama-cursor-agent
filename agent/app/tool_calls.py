@@ -6,8 +6,22 @@ import json
 import re
 from typing import Any
 
+TOOL_ALIASES: dict[str, str] = {
+    "git_init": "clone_workspace_repo",
+    "git_initialize": "clone_workspace_repo",
+    "initialize_repository": "clone_workspace_repo",
+    "clone_repo": "clone_workspace_repo",
+    "github_clone": "clone_workspace_repo",
+}
+
+
+def resolve_tool_name(name: str) -> str:
+    n = (name or "").strip()
+    return TOOL_ALIASES.get(n, n)
+
 
 def normalize_tool_arguments(name: str, args: dict[str, Any]) -> dict[str, Any]:
+    name = resolve_tool_name(name)
     if not isinstance(args, dict):
         args = {}
 
@@ -65,7 +79,7 @@ def ollama_tool_calls(message: dict[str, Any]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for tc in message.get("tool_calls") or []:
         fn = tc.get("function") or tc
-        name = fn.get("name") or tc.get("name") or ""
+        name = resolve_tool_name(fn.get("name") or tc.get("name") or "")
         if not name:
             continue
         args = _args_from_function(fn)
@@ -83,7 +97,7 @@ def ollama_tool_calls(message: dict[str, Any]) -> list[dict[str, Any]]:
         try:
             parsed = json.loads(content)
             if isinstance(parsed, dict) and parsed.get("name"):
-                nm = str(parsed["name"])
+                nm = resolve_tool_name(str(parsed["name"]))
                 args = parsed.get("parameters") or parsed.get("arguments") or {}
                 if isinstance(args, str):
                     try:
@@ -110,7 +124,7 @@ def ollama_tool_calls(message: dict[str, Any]) -> list[dict[str, Any]]:
         try:
             parsed = json.loads(m.group(0))
             if parsed.get("name"):
-                nm = str(parsed["name"])
+                nm = resolve_tool_name(str(parsed["name"]))
                 args = parsed.get("parameters") or parsed.get("arguments") or {}
                 if isinstance(args, dict):
                     out.append(
