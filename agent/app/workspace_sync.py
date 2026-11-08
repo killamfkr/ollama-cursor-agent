@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -91,7 +92,12 @@ async def workspace_status() -> dict[str, Any]:
     elif selected and is_git and origin and not synced:
         hint = (
             f"Workspace origin is {origin} but you selected {selected}. "
-            "Use an empty workspace mount or clone the selected repo."
+            'Use **Replace workspace & clone** (deletes files under /workspace) or mount an empty folder.'
+        )
+    elif selected and not synced and not empty:
+        hint = (
+            f"Selected {selected}, but /workspace has other project files "
+            f"(origin: {origin or 'none'}). Use **Replace workspace & clone** to switch repos."
         )
     elif selected and synced and entries:
         hint = f"Workspace matches {selected} ({len(entries)} top-level items)."
@@ -110,8 +116,88 @@ async def workspace_status() -> dict[str, Any]:
     }
 
 
-async def ensure_workspace_has_repo(repo: str | None = None) -> dict[str, Any]:
+def _clear_workspace_sync() -> dict[str, Any]:
+    """Delete everything under workspace root (keeps agent metadata in data_dir, not workspace)."""
+    root = workspace_root()
+    root.mkdir(parents=True, exist_ok=True)
+    removed: list[str] = []
+    errors: list[str] = []
+    for child in sorted(root.iterdir(), key=lambda p: p.name):
+        if _ignored_entry(child.name):
+            continue
+        try:
+            if child.is_dir() and not child.is_symlink():
+                shutil.rmtree(child)
+            else:
+                child.unlink(missing_ok=True)
+            removed.append(child.name)
+        except OSError as e:
+            errors.append(f"{child.name}: {e}")
+    return {"removed": removed, "errors": errors, "path": str(root)}
+
+
+async def clear_workspace() -> dict[str, Any]:
+    return await asyncio.to_thread(_clear_workspace_sync)
+
+
+async def replace_workspace_with_repo(repo: str | None = None) -> dict[str, Any]:
+    """Wipe /workspace and shallow-clone the selected GitHub repo (Cursor Cloud–style switch)."""
+    repo = (repo or effective_github_repo()).strip()
+    if not repo or "/" not in repo:
+        return {"ok": False, "action": "skipped", "reason": "no repo selected"}
+
+    token = settings.github_token.strip()
+    if not token:
+        return {"ok": False, "action": "skipped", "reason": "AGENT_GITHUB_TOKEN not set"}
+
+    cleared = await clear_workspace()
+    if cleared.get("errors"):
+        return {
+            "ok": False,
+            "action": "clear_failed",
+            "repo": repo,
+            "error": "; ".join(cleared["errors"]),
+            "cleared": cleared,
+        }
+
+    owner, name = repo.split("/", 1)
+    url = _authenticated_url(owner, name, token)
+    root = workspace_root()
+    code, out, err = await _run_git(
+        "clone",
+        "--depth",
+        "1",
+        url,
+        ".",
+        cwd=root,
+    )
+    if code != 0:
+        return {
+            "ok": False,
+            "action": "clone_failed",
+            "repo": repo,
+            "error": (err or out).strip() or f"git exit {code}",
+            "cleared": cleared,
+        }
+
+    await configure_origin_from_settings()
+    st = await workspace_status()
+    return {
+        "ok": True,
+        "action": "replaced",
+        "repo": repo,
+        "cleared": cleared,
+        "workspace": st,
+        "message": f"Removed {len(cleared.get('removed') or [])} items, cloned {repo}.",
+    }
+
+
+async def ensure_workspace_has_repo(
+    repo: str | None = None, *, force_replace: bool = False
+) -> dict[str, Any]:
     """Clone or pull the selected GitHub repo into the workspace mount."""
+    if force_replace:
+        return await replace_workspace_with_repo(repo)
     repo = (repo or effective_github_repo()).strip()
     if not repo or "/" not in repo:
         return {"ok": False, "action": "skipped", "reason": "no repo selected"}
@@ -145,7 +231,10 @@ async def ensure_workspace_has_repo(repo: str | None = None) -> dict[str, Any]:
             "repo": repo,
             "error": "workspace_not_empty",
             "hint": status.get("hint")
-            or "Mount an empty folder at /workspace, then clone again.",
+            or (
+                "Workspace is not empty. Use **Replace workspace & clone** in the UI "
+                "or mount an empty folder at /workspace."
+            ),
             "sample": status.get("top_level_sample"),
         }
 
