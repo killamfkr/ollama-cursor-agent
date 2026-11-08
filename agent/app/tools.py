@@ -121,6 +121,14 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "github_readme",
+        "description": (
+            "Fetch README from the configured GitHub repo via API (when workspace is empty "
+            "or clone failed). Use before claiming you cannot see the project."
+        ),
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
         "name": "github_get_issue",
         "description": "Fetch a GitHub issue (title, body, comments) for the configured repo.",
         "parameters": {
@@ -380,10 +388,35 @@ async def _run_shell(command: str, description: str | None = None) -> str:
     )
 
 
+async def _list_directory_maybe_clone(path: str = ".") -> str:
+    raw = _list_directory(path)
+    if path not in (".", ""):
+        return raw
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return raw
+    if data.get("entries"):
+        return raw
+    repo = effective_github_repo()
+    if not repo or not token_configured():
+        return raw
+    clone = await ensure_workspace_has_repo(repo)
+    data["clone_attempt"] = clone
+    if clone.get("ok"):
+        data = json.loads(_list_directory(path))
+        data["cloned"] = True
+        data["clone"] = {"action": clone.get("action"), "repo": clone.get("repo", repo)}
+    return json.dumps(data, indent=2)
+
+
 async def execute_tool(name: str, arguments: dict[str, Any]) -> str:
+    from .tool_calls import resolve_tool_name
+
+    name = resolve_tool_name(name)
     try:
         if name == "list_directory":
-            return _list_directory(arguments.get("path", "."))
+            return await _list_directory_maybe_clone(arguments.get("path", "."))
         if name == "read_file":
             return _read_file(
                 arguments["path"],
@@ -405,6 +438,12 @@ async def execute_tool(name: str, arguments: dict[str, Any]) -> str:
             return await _run_shell(
                 arguments["command"], arguments.get("description")
             )
+        if name == "github_readme":
+            try:
+                gh = GitHubClient()
+                return json.dumps(await gh.get_readme(), indent=2)
+            except GitHubError as e:
+                return json.dumps({"error": e.message, "status": e.status})
         if name == "github_get_issue":
             try:
                 number = int(arguments.get("number") or 0)

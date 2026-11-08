@@ -35,7 +35,8 @@ Context (what is mounted right now):
 {ctx}
 
 Behaviors:
-- The user sees files on github.com in a browser; you only see the **mounted workspace folder**. If list_directory is empty but a GitHub repo is configured below, call **clone_workspace_repo** — never ask for a repository URL.
+- The user sees files on github.com in a browser; you only see the **mounted workspace folder**. If list_directory is empty but a GitHub repo is configured below, call **clone_workspace_repo** — never `git init` and never ask for a repository URL.
+- Do not describe what the project *does* from the repo name alone; after clone, read **README.md** (or docs) and summarize.
 - Answer conversational questions in plain language using README and list_directory/read_file.
 - Use tools to inspect the repo before changing files; prefer minimal, focused edits.
 - For search_files you MUST pass a regex `pattern` (example: `pattern`=\"FastAPI\"). For broad exploration use list_directory or glob_files.
@@ -44,7 +45,7 @@ Behaviors:
 {gh_note}
 Tools: list_directory, read_file, write_file, search_files, glob_files, run_shell,
 clone_workspace_repo, git_status, git_checkout_branch, git_commit, git_push,
-github_get_issue, github_post_comment, github_create_pull_request.
+github_readme, github_get_issue, github_post_comment, github_create_pull_request.
 All file paths are relative to the workspace root.
 
 Call tools via native tool_calls (not JSON in the chat text).
@@ -146,13 +147,24 @@ async def run_agent_turn(
                         message=f"Cloned {clone.get('repo', ws['selected_repo'])} into workspace.",
                     )
                 )
-        elif on_event:
-            await on_event(
-                session.append_event(
-                    "status",
-                    phase="clone",
-                    message=clone.get("hint") or clone.get("error") or "Clone skipped",
+        else:
+            err = clone.get("hint") or clone.get("error") or json.dumps(clone)
+            if on_event:
+                await on_event(
+                    session.append_event(
+                        "status",
+                        phase="clone",
+                        message=f"Auto-clone failed: {err}",
+                    )
                 )
+            session.messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        f"System: workspace is empty and auto-clone failed ({err}). "
+                        "Call clone_workspace_repo before other git commands."
+                    ),
+                }
             )
 
     final_text = ""

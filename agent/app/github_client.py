@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from typing import Any
 
 import httpx
@@ -73,6 +74,28 @@ class GitHubClient:
                 "private": repo.get("private"),
             }
         return out
+
+    async def get_readme(self) -> dict[str, Any]:
+        if not self.repo or "/" not in self.repo:
+            raise GitHubError(400, "AGENT_GITHUB_REPO not set")
+        try:
+            data = await self._request("GET", f"/repos/{self.repo}/readme")
+        except GitHubError as e:
+            if e.status == 404:
+                return {"found": False, "repo": self.repo}
+            raise
+        raw = data.get("content") or ""
+        try:
+            text = base64.b64decode(raw).decode("utf-8", errors="replace")
+        except Exception:
+            text = ""
+        return {
+            "found": True,
+            "repo": self.repo,
+            "path": data.get("path"),
+            "html_url": data.get("html_url"),
+            "content": text[:12_000],
+        }
 
     async def list_open_issues(self, limit: int = 30) -> list[dict[str, Any]]:
         if not self.configured:
