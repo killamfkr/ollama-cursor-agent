@@ -35,7 +35,7 @@ Context (what is mounted right now):
 {ctx}
 
 Behaviors:
-- The user sees files on github.com in a browser; you only see the **mounted workspace folder**. If it is empty, say so and tell them to use **Clone into workspace** in the UI — do not claim the repo has no files on GitHub.
+- The user sees files on github.com in a browser; you only see the **mounted workspace folder**. If list_directory is empty but a GitHub repo is configured below, call **clone_workspace_repo** — never ask for a repository URL.
 - Answer conversational questions in plain language using README and list_directory/read_file.
 - Use tools to inspect the repo before changing files; prefer minimal, focused edits.
 - For search_files you MUST pass a regex `pattern` (example: `pattern`=\"FastAPI\"). For broad exploration use list_directory or glob_files.
@@ -43,7 +43,7 @@ Behaviors:
 - When the task is a GitHub issue, implement through branch → commit → push → PR.
 {gh_note}
 Tools: list_directory, read_file, write_file, search_files, glob_files, run_shell,
-git_status, git_checkout_branch, git_commit, git_push,
+clone_workspace_repo, git_status, git_checkout_branch, git_commit, git_push,
 github_get_issue, github_post_comment, github_create_pull_request.
 All file paths are relative to the workspace root.
 
@@ -121,6 +121,39 @@ async def run_agent_turn(
     session.messages.append({"role": "user", "content": user_message})
     if on_event:
         await on_event(session.append_event("user_message", content=user_message))
+
+    from .github_prefs import token_configured
+    from .workspace_sync import ensure_workspace_has_repo, workspace_status
+
+    ws = await workspace_status()
+    if ws.get("empty") and ws.get("selected_repo") and token_configured():
+        if on_event:
+            await on_event(
+                session.append_event(
+                    "status",
+                    phase="clone",
+                    message=f"Workspace empty — cloning {ws['selected_repo']}…",
+                )
+            )
+        clone = await ensure_workspace_has_repo(ws["selected_repo"])
+        if clone.get("ok"):
+            session.messages[0] = {"role": "system", "content": build_system_prompt()}
+            if on_event:
+                await on_event(
+                    session.append_event(
+                        "status",
+                        phase="clone",
+                        message=f"Cloned {clone.get('repo', ws['selected_repo'])} into workspace.",
+                    )
+                )
+        elif on_event:
+            await on_event(
+                session.append_event(
+                    "status",
+                    phase="clone",
+                    message=clone.get("hint") or clone.get("error") or "Clone skipped",
+                )
+            )
 
     final_text = ""
 

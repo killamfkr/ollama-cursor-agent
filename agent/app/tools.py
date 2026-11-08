@@ -20,6 +20,8 @@ from .git_ops import (
     git_status,
 )
 from .github_client import GitHubClient, GitHubError
+from .github_prefs import effective_github_repo, token_configured
+from .workspace_sync import ensure_workspace_has_repo
 
 
 def _resolve_safe(path: str) -> Path:
@@ -163,6 +165,23 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "clone_workspace_repo",
+        "description": (
+            "Clone the GitHub repo selected in the UI (or AGENT_GITHUB_REPO) into the "
+            "empty workspace mount. Call this when list_directory is empty but a repo is configured — "
+            "do NOT ask the user for a URL."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "repo": {
+                    "type": "string",
+                    "description": "Optional owner/name override; default is the UI-selected repo",
+                }
+            },
+        },
+    },
+    {
         "name": "git_status",
         "description": "Show current git branch and uncommitted changes.",
         "parameters": {"type": "object", "properties": {}},
@@ -228,7 +247,20 @@ def _list_directory(path: str = ".") -> str:
             size = None
         rel = child.relative_to(Path(settings.workspace_root).resolve())
         entries.append({"name": child.name, "path": str(rel), "type": kind, "size": size})
-    return json.dumps({"path": path, "entries": entries}, indent=2)
+    payload: dict[str, Any] = {"path": path, "entries": entries}
+    if not entries and path in (".", ""):
+        repo = effective_github_repo()
+        if repo and token_configured():
+            payload["hint"] = (
+                f"Workspace is empty on disk. GitHub repo `{repo}` is selected — "
+                "call clone_workspace_repo (do not ask for a URL)."
+            )
+        else:
+            payload["hint"] = (
+                "Workspace is empty. User must pick a repo in the GitHub sidebar and "
+                "click Clone into workspace, or set AGENT_GITHUB_TOKEN."
+            )
+    return json.dumps(payload, indent=2)
 
 
 def _read_file(path: str, offset: int = 1, limit: int | None = None) -> str:
@@ -415,6 +447,24 @@ async def execute_tool(name: str, arguments: dict[str, Any]) -> str:
                 },
                 indent=2,
             )
+        if name == "clone_workspace_repo":
+            repo = (arguments.get("repo") or effective_github_repo() or "").strip()
+            if not repo:
+                return json.dumps(
+                    {
+                        "error": "no_repo_selected",
+                        "hint": "Pick a repository in the GitHub sidebar of the web UI.",
+                    }
+                )
+            if not token_configured():
+                return json.dumps(
+                    {
+                        "error": "no_token",
+                        "hint": "Set AGENT_GITHUB_TOKEN on the container.",
+                    }
+                )
+            result = await ensure_workspace_has_repo(repo)
+            return json.dumps(result, indent=2)
         if name == "git_status":
             return json.dumps(await git_status(), indent=2)
         if name == "git_checkout_branch":
