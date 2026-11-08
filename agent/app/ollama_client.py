@@ -20,6 +20,16 @@ class OllamaChatError(Exception):
         self.body = body
 
 
+def trim_messages_for_ollama(
+    messages: list[dict[str, Any]], *, max_turns: int = 28
+) -> list[dict[str, Any]]:
+    if len(messages) <= max_turns:
+        return messages
+    system = [m for m in messages if m.get("role") == "system"]
+    rest = [m for m in messages if m.get("role") != "system"]
+    return system + rest[-max_turns:]
+
+
 def sanitize_messages_for_ollama(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Shape messages for Ollama /api/chat (tool_name required on tool results)."""
     out: list[dict[str, Any]] = []
@@ -93,7 +103,7 @@ class OllamaClient:
         tools: bool = True,
         stream: bool = False,
     ) -> dict[str, Any] | AsyncIterator[dict[str, Any]]:
-        clean = sanitize_messages_for_ollama(messages)
+        clean = sanitize_messages_for_ollama(trim_messages_for_ollama(messages))
         payload: dict[str, Any] = {
             "model": model,
             "messages": clean,
@@ -128,17 +138,26 @@ class OllamaClient:
                 body[:500],
             )
 
-            if allow_tool_fallback and r.status_code == 400 and "tools" in payload:
-                payload_no_tools = {
-                    k: v for k, v in payload.items() if k != "tools"
-                }
-                r2 = await client.post(
-                    f"{self.base_url}/api/chat", json=payload_no_tools
+            if r.status_code == 400:
+                fallbacks: list[dict[str, Any]] = []
+                base = {k: v for k, v in payload.items() if k != "tools"}
+                base["options"] = {**base.get("options", {}), "num_ctx": 4096}
+                fallbacks.append(base)
+                if allow_tool_fallback and "tools" in payload:
+                    fallbacks.append({**payload, "options": {**payload.get("options", {}), "num_ctx": 4096}})
+                trimmed = trim_messages_for_ollama(payload["messages"], max_turns=16)
+                fallbacks.append(
+                    {
+                        **base,
+                        "messages": sanitize_messages_for_ollama(trimmed),
+                    }
                 )
-                if r2.status_code < 400:
-                    return r2.json()
-                body = r2.text
-                r = r2
+                for fb in fallbacks:
+                    r2 = await client.post(f"{self.base_url}/api/chat", json=fb)
+                    if r2.status_code < 400:
+                        return r2.json()
+                    body = r2.text
+                    r = r2
 
             detail = body
             try:

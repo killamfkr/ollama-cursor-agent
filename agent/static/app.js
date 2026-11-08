@@ -491,7 +491,12 @@ async function loadAppMeta() {
   try {
     const r = await fetch("/api/config");
     const data = await r.json();
-    el.textContent = data.version ? `Agent v${data.version}` : "";
+    const v = data.version || "";
+    el.textContent = v ? `Agent v${v}` : "";
+    if (v && v < "0.3.2") {
+      el.textContent += " — pull latest image";
+      el.style.color = "var(--danger)";
+    }
   } catch (_) {
     el.textContent = "";
   }
