@@ -92,12 +92,14 @@ Usually means the **Ollama version is old**, the **model does not support tools*
 
 ## Verify
 
+**Port 8080 is often used by Open WebUI on Unraid.** If `curl .../api/config` returns `"name":"Open WebUI"`, you are not talking to this agent — use the **ollama-cursor-agent** container’s host port (Docker tab → port mapping, e.g. 8283).
+
 ```bash
-curl -s "http://<UNRAID-IP>:8080/api/health"
-curl -s "http://<UNRAID-IP>:8080/api/config" | grep version
+curl -s "http://<UNRAID-IP>:<AGENT-PORT>/api/health"
+curl -s "http://<UNRAID-IP>:<AGENT-PORT>/api/config"
 ```
 
-You should see **`"version":"0.2.2"`** (or newer) after updating the container image.
+Agent config includes **`"version":"0.3.2"`** (or newer), `"workspace_root"`, and optional `github_repo` — not Open WebUI’s `"name":"Open WebUI"`.
 
 ## Updates (when Unraid does not show one)
 
