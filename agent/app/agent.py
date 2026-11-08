@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Callable, Awaitable
 
 from .config import settings
-from .ollama_client import OllamaClient
+from .ollama_client import OllamaChatError, OllamaClient
 from .tools import execute_tool
 from .tool_calls import ollama_tool_calls
 from .workspace_context import workspace_context_block
@@ -180,7 +180,19 @@ async def run_agent_turn(
                 )
             )
 
-        response = await ollama.chat(session.messages, model=session.model, tools=True)
+        try:
+            response = await ollama.chat(session.messages, model=session.model, tools=True)
+        except OllamaChatError as e:
+            hint = (
+                f"Ollama error ({e.status}): {e.message}. "
+                "Try a tool-capable model (qwen2.5-coder, llama3.1) and update Ollama to 0.3+. "
+                "If tools are unsupported, the agent retried without tools."
+            )
+            final_text = hint
+            if on_event:
+                await on_event(session.append_event("assistant_message", content=hint))
+            break
+
         msg = response.get("message", {})
         content = msg.get("content") or ""
         calls = ollama_tool_calls(msg)
@@ -290,6 +302,10 @@ async def stream_agent_turn(
     async def runner() -> None:
         try:
             await run_agent_turn(session, user_message, on_event=on_event)
+        except Exception as e:
+            await queue.put(
+                session.append_event("assistant_message", content=f"Agent error: {e}")
+            )
         finally:
             await queue.put(None)
 
