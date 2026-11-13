@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .agent import run_agent_turn, store, stream_agent_turn
 from .config import settings
@@ -79,8 +79,28 @@ class RunIssueRequest(BaseModel):
     instruction: str = ""
 
 
+def _coerce_github_repo(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        name = value.get("full_name") or value.get("repo")
+        if name:
+            return str(name).strip()
+        raise ValueError("repo must be owner/name or { full_name: ... }")
+    s = str(value).strip()
+    return s or None
+
+
 class GitHubRepoRequest(BaseModel):
     repo: str
+
+    @field_validator("repo", mode="before")
+    @classmethod
+    def _repo_string(cls, value: Any) -> str:
+        out = _coerce_github_repo(value)
+        if not out or "/" not in out:
+            raise ValueError("repo must be owner/name")
+        return out
 
 
 class WorkspaceReplaceRequest(BaseModel):
@@ -92,6 +112,11 @@ class WorkspaceReplaceRequest(BaseModel):
         default=None,
         description="Optional owner/name; defaults to the UI-selected repo",
     )
+
+    @field_validator("repo", mode="before")
+    @classmethod
+    def _repo_optional_string(cls, value: Any) -> str | None:
+        return _coerce_github_repo(value)
 
 
 @app.get("/api/health")

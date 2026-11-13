@@ -7,6 +7,13 @@ const healthStatus = document.getElementById("healthStatus");
 const sessionLabel = document.getElementById("sessionLabel");
 const sendBtn = document.getElementById("sendBtn");
 
+function repoFullName(repo) {
+  if (!repo) return "";
+  if (typeof repo === "string") return repo;
+  if (typeof repo === "object" && repo.full_name) return repo.full_name;
+  return String(repo);
+}
+
 function escapeHtml(s) {
   return String(s)
     .replace(/&/g, "&amp;")
@@ -18,6 +25,12 @@ function escapeHtml(s) {
 function workspaceCloneMessage(payload) {
   const d = payload?.detail !== undefined ? payload.detail : payload;
   if (typeof d === "string") return d;
+  if (Array.isArray(d)) {
+    return d
+      .map((e) => e?.msg || JSON.stringify(e))
+      .filter(Boolean)
+      .join("\n");
+  }
   if (!d || typeof d !== "object") return String(d ?? "Unknown error");
   const parts = [];
   if (d.action) parts.push(`Step: ${d.action}`);
@@ -309,7 +322,7 @@ async function loadGithubRepos(preselect) {
       select.disabled = true;
       return;
     }
-    const pick = preselect || data.selected || selectedRepo;
+    const pick = repoFullName(preselect || data.selected || selectedRepo);
     for (const repo of repos) {
       const opt = document.createElement("option");
       opt.value = repo.full_name;
@@ -339,7 +352,7 @@ async function setGithubRepo(fullName) {
   });
   const data = await r.json();
   if (!r.ok) throw new Error(data.detail || JSON.stringify(data));
-  selectedRepo = data.repo;
+  selectedRepo = repoFullName(data.repo);
   if (data.clone) {
     const ws = document.getElementById("workspaceStatus");
     if (data.clone.ok) {
@@ -389,10 +402,9 @@ async function loadWorkspaceStatus() {
 }
 
 async function runWorkspaceReplace() {
-  const repo =
-    selectedRepo ||
-    document.getElementById("repoSelect")?.value ||
-    "";
+  const repo = repoFullName(
+    selectedRepo || document.getElementById("repoSelect")?.value || ""
+  );
   if (!repo) {
     showWorkspaceAlert("Pick a repository first.", { title: "No repository" });
     return;
@@ -482,7 +494,13 @@ async function loadGithub() {
     const r = await fetch("/api/github/status");
     const data = await r.json();
     repoLocked = Boolean(data.repo_locked);
-    selectedRepo = data.repo || data.repo_selected_ui || data.repo_detected_workspace || null;
+    selectedRepo = repoFullName(
+      data.repo_selected_ui ||
+        data.repo ||
+        data.repo_detected_workspace ||
+        data.repo_details?.full_name ||
+        null
+    ) || null;
 
     if (!data.token_configured) {
       el.textContent =
