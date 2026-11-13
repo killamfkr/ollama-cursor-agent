@@ -619,16 +619,37 @@ document.getElementById("runIssueBtn").addEventListener("click", () => {
   runIssue(n);
 });
 
+function parseVersionParts(v) {
+  return String(v || "")
+    .split(".")
+    .map((n) => parseInt(n, 10) || 0);
+}
+
+function versionOlderThan(current, minimum) {
+  const a = parseVersionParts(current);
+  const b = parseVersionParts(minimum);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const x = a[i] ?? 0;
+    const y = b[i] ?? 0;
+    if (x < y) return true;
+    if (x > y) return false;
+  }
+  return false;
+}
+
+const RECOMMENDED_AGENT_VERSION = "0.3.9";
+
 async function loadAppMeta() {
   const el = document.getElementById("appVersion");
   if (!el) return;
   try {
-    const r = await fetch("/api/config");
+    const r = await fetch("/api/config", { cache: "no-store" });
     const data = await r.json();
     const v = data.version || "";
+    el.style.color = "";
     el.textContent = v ? `Agent v${v}` : "";
-    if (v && v < "0.3.2") {
-      el.textContent += " — pull latest image";
+    if (v && versionOlderThan(v, RECOMMENDED_AGENT_VERSION)) {
+      el.textContent += ` — pull :${RECOMMENDED_AGENT_VERSION}, then Stop → Edit → Apply`;
       el.style.color = "var(--danger)";
     }
   } catch (_) {

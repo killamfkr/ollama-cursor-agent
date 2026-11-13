@@ -99,7 +99,9 @@ curl -s "http://<UNRAID-IP>:<AGENT-PORT>/api/health"
 curl -s "http://<UNRAID-IP>:<AGENT-PORT>/api/config"
 ```
 
-Agent config includes **`"version":"0.3.2"`** (or newer), `"workspace_root"`, and optional `github_repo` — not Open WebUI’s `"name":"Open WebUI"`.
+Agent config includes **`"version":"0.3.9"`** (or newer), `"workspace_root"`, and optional `github_repo` — not Open WebUI’s `"name":"Open WebUI"`.
+
+If the web UI still shows **v0.3.8** after “updating”, the **running container** was not recreated — `docker pull` only updates the image on disk (see below).
 
 ## Updates (when Unraid does not show one)
 
@@ -112,10 +114,24 @@ Unraid often **does not flag** a new `ghcr.io/...:latest` image. The GitHub Acti
 **1. Pull the image** (Unraid terminal or SSH):
 
 ```bash
-docker pull ghcr.io/killamfkr/ollama-cursor-agent:latest
+docker pull ghcr.io/killamfkr/ollama-cursor-agent:0.3.9
+# or: docker pull ghcr.io/killamfkr/ollama-cursor-agent:latest
 ```
 
-**2. Recreate the container** — Docker → **ollama-cursor-agent** → Stop → start again, or enable **Advanced view** → **Force update** / re-apply the template.
+**2. Recreate the container** (required — **Stop → Start is not enough** on many Unraid setups):
+
+- Docker → **ollama-cursor-agent** → **Stop**
+- **Edit** → set Repository to `ghcr.io/killamfkr/ollama-cursor-agent:0.3.9` → **Apply** → **Start**
+
+Or **Advanced view** → **Force update**, then **Apply**.
+
+**3. Verify** (use your agent host port, e.g. 8283):
+
+```bash
+curl -s http://<UNRAID-IP>:8283/api/config
+```
+
+Expect **`"version":"0.3.9"`**. The sidebar line **Agent v0.3.9** comes from this API, not from the Unraid “updated” banner.
 
 **3. Refresh the Private Apps template** (new paths like Agent data, repo UI):
 
