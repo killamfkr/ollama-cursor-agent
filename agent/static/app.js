@@ -20,9 +20,16 @@ function workspaceCloneMessage(payload) {
   if (typeof d === "string") return d;
   if (!d || typeof d !== "object") return String(d ?? "Unknown error");
   const parts = [];
-  if (d.hint) parts.push(d.hint);
-  else if (d.error) parts.push(String(d.error));
+  if (d.action) parts.push(`Step: ${d.action}`);
+  if (d.error) parts.push(String(d.error));
   else if (d.reason) parts.push(String(d.reason));
+  if (d.hint) parts.push(d.hint);
+  if (d.cleared?.errors?.length) {
+    parts.push(`Remove errors:\n${d.cleared.errors.join("\n")}`);
+  }
+  if (d.install_errors?.length) {
+    parts.push(`Install errors:\n${d.install_errors.join("\n")}`);
+  }
   if (d.sample?.length) parts.push(`On disk: ${d.sample.join(", ")}`);
   if (d.repo) parts.push(`Selected repo: ${d.repo}`);
   if (!parts.length) return JSON.stringify(d, null, 2);
