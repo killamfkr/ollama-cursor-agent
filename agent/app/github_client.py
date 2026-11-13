@@ -68,7 +68,7 @@ class GitHubClient:
         out: dict[str, Any] = {"login": user.get("login"), "ok": True}
         if self.repo and "/" in self.repo:
             repo = await self._request("GET", f"/repos/{self.repo}")
-            out["repo"] = {
+            out["repo_details"] = {
                 "full_name": repo.get("full_name"),
                 "default_branch": repo.get("default_branch"),
                 "private": repo.get("private"),
