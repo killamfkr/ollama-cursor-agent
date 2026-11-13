@@ -9,14 +9,14 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/killamfkr/ollama-cursor-agent/tree/main/unraid</Support>
   <Project>https://github.com/killamfkr/ollama-cursor-agent</Project>
-  <Overview>Local Cursor-style coding agent: chat UI, file tools, shell, and optional GitHub branch/PR workflow — powered by Ollama on your Unraid box.[br][br]1. Install [b]ollama[/b] and pull a coding model.[br]2. Set [b]Ollama Base URL[/b] to [b]http://YOUR-UNRAID-IP:11434[/b].[br]3. Mount [b]Workspace[/b] (git clone) and [b]Agent data[/b] for saved GitHub repo choice.[br]4. Set [b]GitHub Token[/b] only — pick the repo in the Web UI (v0.2.2+).[br][br]If Docker does not show an update: [b]docker pull ghcr.io/killamfkr/ollama-cursor-agent:latest[/b] then recreate the container. Check version: [b]/api/config[/b] → [b]version[/b] = 0.2.2.</Overview>
+  <Overview>Local Cursor-style coding agent: chat UI, file tools, shell, and optional GitHub branch/PR workflow — powered by Ollama on your Unraid box.[br][br]1. Install [b]ollama[/b] and pull a coding model.[br]2. Set [b]Ollama Base URL[/b] to [b]http://YOUR-UNRAID-IP:11434[/b].[br]3. Mount [b]Workspace[/b] and [b]Agent data[/b] (/data — saved repo choice).[br]4. Set [b]GitHub Token[/b] — pick the repo in the Web UI.[br][br][b]Updates:[/b] [b]docker pull[/b] only downloads the image; you must [b]Stop → Edit → Apply[/b] to recreate the container. [b]:latest[/b] on GHCR tracks the newest build (currently 0.3.11+). Verify: [b]curl http://IP:PORT/api/config[/b] → [b]version[/b] must match the image tag — not the Unraid “updated” banner.</Overview>
   <Category>Tools:Utilities</Category>
   <WebUI>http://[IP]:[PORT:8080]/</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/killamfkr/ollama-cursor-agent/main/unraid/ollama-cursor-agent.xml</TemplateURL>
   <Icon>https://ollama.com/public/apple-touch-icon.png</Icon>
   <ExtraParams>--restart unless-stopped</ExtraParams>
   <Date>1794096000</Date>
-  <Changes>v0.2.2 — GHCR registry URL for update checks, template refresh, /api/config version field. Pull image manually if Docker shows no update.</Changes>
+  <Changes>v0.3.11 — Replace workspace fix, clone-via-/tmp on Unraid. Pin image :0.3.11 or pull :latest then Edit→Apply. Web UI shows Agent vX from /api/config.</Changes>
   <PostArgs/>
   <CPUset/>
   <DonateText/>
