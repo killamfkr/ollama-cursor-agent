@@ -6,6 +6,17 @@ import json
 import re
 from typing import Any
 
+_FAKE_TOOL_ROLL_RE = re.compile(
+    r"^\(\s*called\s+tools\s*:\s*.+\)\s*$",
+    re.IGNORECASE,
+)
+
+
+def is_fake_tool_roll_call(text: str) -> bool:
+    """True when the model echoed our Ollama-history placeholder instead of using tools."""
+    return bool(_FAKE_TOOL_ROLL_RE.match((text or "").strip()))
+
+
 TOOL_ALIASES: dict[str, str] = {
     "git_init": "clone_workspace_repo",
     "git_initialize": "clone_workspace_repo",
