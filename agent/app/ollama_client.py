@@ -90,7 +90,10 @@ def strip_assistant_tool_calls(
                 if fn.get("name"):
                     names.append(str(fn["name"]))
             if names:
-                row["content"] = f"(called tools: {', '.join(names)})"
+                # Do not list tool names here — weak models echo this string as a fake reply.
+                row["content"] = (
+                    "[Assistant invoked tools in a prior turn; tool results follow.]"
+                )
         out.append(row)
     return out
 
@@ -213,7 +216,9 @@ class OllamaClient:
         async with httpx.AsyncClient(timeout=600.0) as client:
             r = await client.post(f"{self.base_url}/api/chat", json=payload)
             if r.status_code < 400:
-                return r.json()
+                data = r.json()
+                data["_agent_tools_in_request"] = bool(payload.get("tools"))
+                return data
 
             body = r.text
             logger.warning(
@@ -257,7 +262,9 @@ class OllamaClient:
                 for fb in fallbacks:
                     r2 = await client.post(f"{self.base_url}/api/chat", json=fb)
                     if r2.status_code < 400:
-                        return r2.json()
+                        data = r2.json()
+                        data["_agent_tools_in_request"] = bool(fb.get("tools"))
+                        return data
                     body = r2.text
                     r = r2
 

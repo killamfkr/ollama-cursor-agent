@@ -655,7 +655,7 @@ function versionOlderThan(current, minimum) {
   return false;
 }
 
-const RECOMMENDED_AGENT_VERSION = "0.3.12";
+const RECOMMENDED_AGENT_VERSION = "0.3.13";
 
 async function loadAppMeta() {
   const el = document.getElementById("appVersion");

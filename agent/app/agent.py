@@ -14,7 +14,7 @@ from .ollama_client import (
     normalize_ollama_assistant_message,
 )
 from .tools import execute_tool
-from .tool_calls import ollama_tool_calls
+from .tool_calls import is_fake_tool_roll_call, ollama_tool_calls
 from .workspace_context import workspace_context_block
 
 
@@ -202,6 +202,18 @@ async def run_agent_turn(
 
         try:
             response = await ollama.chat(session.messages, model=session.model, tools=True)
+            tools_enabled = bool(response.pop("_agent_tools_in_request", True))
+            if not tools_enabled and on_event:
+                await on_event(
+                    session.append_event(
+                        "status",
+                        phase="warning",
+                        message=(
+                            "Ollama accepted the chat without the tool schema "
+                            "(history/context fallback). Use qwen2.5-coder and Ollama 0.3+."
+                        ),
+                    )
+                )
         except OllamaChatError as e:
             hint = (
                 f"Ollama error ({e.status}): {e.message}. "
@@ -315,6 +327,59 @@ async def run_agent_turn(
         if content.strip() and not ollama_tool_calls(
             {"content": content, "tool_calls": []}
         ):
+            if is_fake_tool_roll_call(content) and step < settings.max_agent_steps - 1:
+                if on_event:
+                    await on_event(
+                        session.append_event(
+                            "status",
+                            phase="continue",
+                            message="Model echoed a tool summary — requesting real tool_calls…",
+                        )
+                    )
+                session.messages.append({"role": "assistant", "content": content})
+                session.messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "Do not reply with '(called tools: …)' or similar summaries. "
+                            "Invoke tools via native tool_calls now (with JSON arguments), "
+                            "then answer using the tool results."
+                        ),
+                    }
+                )
+                continue
+            if is_fake_tool_roll_call(content):
+                final_text = (
+                    "The model replied with a tool-name summary instead of running tools. "
+                    "Switch to qwen2.5-coder (or another tool-capable model), update Ollama "
+                    "to 0.3+, and retry."
+                )
+                if on_event:
+                    await on_event(
+                        session.append_event("assistant_message", content=final_text)
+                    )
+                break
+            if not tools_enabled and step < settings.max_agent_steps - 1:
+                session.messages.append({"role": "assistant", "content": content})
+                session.messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "Tools were not active for that request. You must call "
+                            "list_directory, read_file, search_files, or other tools "
+                            "via native tool_calls before claiming work is done."
+                        ),
+                    }
+                )
+                if on_event:
+                    await on_event(
+                        session.append_event(
+                            "status",
+                            phase="continue",
+                            message="Retrying with tools required…",
+                        )
+                    )
+                continue
             if _is_inspect_promise_only(content) and step < settings.max_agent_steps - 1:
                 if on_event:
                     await on_event(
